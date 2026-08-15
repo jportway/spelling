@@ -48,6 +48,7 @@
     speakLetters: true,
     speakDefinitions: true,
     wordGlow: true,
+    kitten: true,
     sound: true,
     calm: false
   };
@@ -266,6 +267,18 @@
     refreshCheckButton();
   }
 
+  /* Letters still sitting in the grid, as a 26 slot count. These are the ones
+     she could actually reach to finish a word off. */
+  function freeLetters() {
+    var letters = "";
+    for (var i = 0; i < state.tiles.length; i++) {
+      if (state.line.indexOf(state.tiles[i].id) === -1) {
+        letters += state.tiles[i].letter;
+      }
+    }
+    return global.Dictionary.countLetters(letters);
+  }
+
   function refreshCheckButton() {
     var word = currentWord();
     var isWord = word.length >= MIN_WORD &&
@@ -276,6 +289,27 @@
     dom.checkBtn.classList.toggle("is-glowing", isWord && settings.wordGlow);
     dom.wordLine.classList.toggle("is-word", isWord && settings.wordGlow);
     dom.soundOutBtn.disabled = word.length === 0;
+
+    updateKitten(word, isWord);
+  }
+
+  /* The kitten's mood follows the word line: nothing, something, nearly, got
+     it. Only the "nearly" case costs a dictionary search, and only when the
+     line is not already a word. */
+  function updateKitten(word, isWord) {
+    if (!state.running) return;
+
+    var mood = "idle";
+    if (isWord) {
+      mood = "ready";
+    } else if (word.length) {
+      // oneAwayFromWord ignores single letters, so the first tile down always
+      // lands on "watching" — she gets a reaction from the very first tap.
+      mood = global.Dictionary.oneAwayFromWord(word, freeLetters())
+        ? "close"
+        : "watching";
+    }
+    global.Kitten.setState(mood);
   }
 
   function removeFromLine(id) {
@@ -407,6 +441,7 @@
   function rejectWord(word) {
     rejectLine();
     global.Sound.nudge();
+    global.Kitten.react("nudge");
 
     var available = global.Dictionary.countLetters(allLetters());
     var confusion = global.Dictionary.confusionMiss(word, available);
@@ -512,6 +547,7 @@
     showMessage(praise + " <strong>" + word + "</strong>" + extra, "good");
 
     global.Sound.success(word.length);
+    global.Kitten.react(big ? "bigcheer" : "cheer");
     global.Confetti.burstFrom(dom.wordLine, big ? 1.4 : 1);
     flyWordToList(word);
 
@@ -651,6 +687,7 @@
     state.secondsLeft = state.minutes * 60;
 
     buildGrid(grid.letters);
+    global.Kitten.reset();
     renderLine();
 
     dom.foundList.innerHTML = "";
@@ -670,6 +707,7 @@
     state.paused = true;
     stopClock();
     global.Speech.stop();
+    global.Kitten.setState("sleep");
     dom.app.classList.add("is-paused");
     openOverlay(dom.pauseScreen);
   }
@@ -677,6 +715,7 @@
   function resumeRound() {
     if (!state.running || !state.paused) return;
     state.paused = false;
+    global.Kitten.setState("idle");
     dom.app.classList.remove("is-paused");
     closeOverlay(dom.pauseScreen);
     startClock();
@@ -733,7 +772,12 @@
 
     renderMissed();
 
-    if (state.found.length) global.Confetti.celebrate();
+    if (state.found.length) {
+      global.Confetti.celebrate();
+      global.Kitten.react("bigcheer");
+    } else {
+      global.Kitten.setState("sleep");
+    }
     openOverlay(dom.endScreen);
   }
 
@@ -843,12 +887,14 @@
     speakLetters: "setSpeakLetters",
     speakDefinitions: "setSpeakDefinitions",
     wordGlow: "setWordGlow",
+    kitten: "setKitten",
     sound: "setSound",
     calm: "setCalm"
   };
 
   function applySettings() {
     global.Sound.enabled = settings.sound;
+    global.Kitten.setEnabled(settings.kitten);
     global.Confetti.calm = settings.calm;
     document.body.classList.toggle("calm", settings.calm);
     applyLetterHelper();
@@ -864,6 +910,7 @@
         applySettings();
         saveStore();
         if (key === "sound" && input.checked) global.Sound.place();
+        if (key === "kitten" && input.checked) global.Kitten.react("cheer");
       });
     });
   }
@@ -939,6 +986,7 @@
       },
 
       onPick: function (element) {
+        global.Kitten.watch(element);
         global.Sound.pick();
         if (settings.speakLetters) {
           global.Speech.letter(element.getAttribute("data-letter"));
@@ -1114,6 +1162,7 @@
     loadStore();
 
     global.Confetti.init(byId("confetti"));
+    global.Kitten.init(byId("kitten"));
     state.foundSet = new Set();
 
     wireSettings();

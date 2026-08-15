@@ -1,0 +1,392 @@
+/* ==========================================================================
+   kitten.css — the cat that watches her play.
+
+   Two rules govern everything here:
+
+     1. It must never compete with the letters. Idle is almost still, the
+        palette avoids all six tricky-letter colours, and it sits above the
+        word line where it cannot cover a tile at any width.
+     2. Every reaction has several animations rather than one. A single fixed
+        celebration stops being a reward after about four goes; js/kitten.js
+        picks a different one each time.
+   ========================================================================== */
+
+:root {
+  /* A soft lilac-grey cat. Deliberately none of the tricky-letter hues, so
+     the kitten can never be mistaken for a letter cue. */
+  --cat-fur:     #ded9ec;
+  --cat-shade:   #c6bfdd;
+  --cat-cream:   #fdfcf7;
+  --cat-rose:    #efa3b6;
+  --cat-ink:     #2a3152;
+
+  /* One source of truth for the size: .build reserves head-room from this, so
+     the cat can never grow into the word line or float away from it. */
+  --cat-size:    clamp(64px, 13vmin, 104px);
+}
+
+.kitten {
+  position: absolute;
+  top: 0;
+  left: clamp(2px, 2vw, 20px);
+  width: var(--cat-size);
+  transform-origin: 50% 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.kitten-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* --------------------------------------------------------------------------
+   The cat itself
+   -------------------------------------------------------------------------- */
+
+.k-body   { fill: var(--cat-fur); }
+.k-belly  { fill: var(--cat-cream); }
+.k-paw    { fill: var(--cat-cream); }
+.k-face   { fill: var(--cat-fur); }
+.k-ear    { fill: var(--cat-fur); }
+.k-ear-in { fill: var(--cat-rose); }
+.k-tail   { fill: none; stroke: var(--cat-fur); stroke-width: 11; stroke-linecap: round; }
+.k-eye    { fill: var(--cat-cream); }
+.k-pupil  { fill: var(--cat-ink); }
+.k-glint  { fill: #fff; }
+.k-nose   { fill: var(--cat-rose); }
+.k-blush  { fill: var(--cat-rose); opacity: .45; }
+
+.k-stripe {
+  fill: none;
+  stroke: var(--cat-shade);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.k-mouth {
+  fill: none;
+  stroke: var(--cat-ink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.k-whiskers {
+  fill: none;
+  stroke: var(--cat-shade);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+/* Hidden until a reaction asks for them. */
+.k-lid        { fill: none; stroke: var(--cat-ink); stroke-width: 2.6; stroke-linecap: round; opacity: 0; }
+.k-mouth-open { fill: var(--cat-rose); opacity: 0; }
+.k-hearts     { opacity: 0; }
+.k-heart      { fill: var(--cat-rose); }
+.k-zzz        { opacity: 0; }
+.k-z          { fill: var(--ink-soft); font-family: var(--font-letters); font-size: 15px; font-weight: 800; }
+
+/* Transform origins, so heads turn about the neck and ears flick at the base. */
+.k-head       { transform-origin: 60px 46px; }
+.k-ear-l, .k-ear-in-l { transform-origin: 40px 28px; }
+.k-ear-r, .k-ear-in-r { transform-origin: 80px 28px; }
+.k-tail-group { transform-origin: 88px 92px; }
+.k-paw-l      { transform-origin: 47px 96px; }
+.k-paw-r      { transform-origin: 73px 96px; }
+.k-eyes       { transform-origin: 60px 34px; }
+.k-pupils     { transition: transform .18s ease-out; }
+
+/* --------------------------------------------------------------------------
+   Always running: breathing, and a tail that never quite settles
+   -------------------------------------------------------------------------- */
+
+.kitten-svg   { animation: k-breathe 3.4s ease-in-out infinite; transform-origin: 60px 100px; }
+.k-tail-group { animation: k-tail-idle 4.2s ease-in-out infinite; }
+
+@keyframes k-breathe {
+  50% { transform: scaleY(1.025) scaleX(.99); }
+}
+
+@keyframes k-tail-idle {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(-11deg); }
+}
+
+/* ==========================================================================
+   Reactions. Each block is one option out of several for that state, and
+   js/kitten.js chooses between them.
+   ========================================================================== */
+
+/* ---- idle fidgets, fired now and then so she never looks frozen ---- */
+
+.k-idle-blink .k-lid    { animation: k-blink 1.1s ease-in-out; }
+.k-idle-blink .k-pupils { animation: k-pupils-hide 1.1s ease-in-out; }
+
+@keyframes k-blink {
+  0%, 34%, 46%, 100% { opacity: 0; }
+  36%, 44%           { opacity: 1; }
+}
+@keyframes k-pupils-hide {
+  0%, 34%, 46%, 100% { opacity: 1; }
+  36%, 44%           { opacity: 0; }
+}
+
+.k-idle-earflick .k-ear-l,
+.k-idle-earflick .k-ear-in-l { animation: k-earflick .7s ease-in-out; }
+
+@keyframes k-earflick {
+  30% { transform: rotate(-13deg); }
+  60% { transform: rotate(5deg); }
+}
+
+.k-idle-tailflick .k-tail-group { animation: k-tailflick 1s ease-in-out; }
+
+@keyframes k-tailflick {
+  25% { transform: rotate(24deg); }
+  55% { transform: rotate(-18deg); }
+  80% { transform: rotate(8deg); }
+}
+
+.k-idle-tilt .k-head { animation: k-tilt 1.8s ease-in-out; }
+
+@keyframes k-tilt {
+  30%, 60% { transform: rotate(-8deg); }
+}
+
+.k-idle-look .k-pupils { animation: k-look 2.4s ease-in-out; }
+
+@keyframes k-look {
+  20%, 30% { transform: translateX(3px); }
+  55%, 65% { transform: translateX(-3px); }
+}
+
+.k-idle-yawn .k-mouth-open { animation: k-yawn 1.6s ease-in-out; }
+.k-idle-yawn .k-lid        { animation: k-yawn-lids 1.6s ease-in-out; }
+.k-idle-yawn .k-pupils     { animation: k-yawn-pupils 1.6s ease-in-out; }
+.k-idle-yawn .k-mouth      { animation: k-hide 1.6s ease-in-out; }
+
+@keyframes k-yawn        { 0%, 100% { opacity: 0; transform: scaleY(.2); }
+                           35%, 65% { opacity: 1; transform: scaleY(1); } }
+@keyframes k-yawn-lids   { 0%, 100% { opacity: 0; } 30%, 70% { opacity: 1; } }
+@keyframes k-yawn-pupils { 0%, 100% { opacity: 1; } 30%, 70% { opacity: 0; } }
+@keyframes k-hide        { 30%, 70% { opacity: 0; } }
+
+/* ---- watching: a letter just went down ---- */
+
+.k-watch-perk .k-ear-l, .k-watch-perk .k-ear-in-l { animation: k-perk-l .6s ease-out; }
+.k-watch-perk .k-ear-r, .k-watch-perk .k-ear-in-r { animation: k-perk-r .6s ease-out; }
+
+@keyframes k-perk-l { 40% { transform: rotate(-9deg) translateY(-3px); } }
+@keyframes k-perk-r { 40% { transform: rotate(9deg) translateY(-3px); } }
+
+.k-watch-lean .k-head { animation: k-lean .8s ease-in-out; }
+
+@keyframes k-lean { 45% { transform: translateY(3px) rotate(4deg); } }
+
+.k-watch-bob { animation: k-bob .55s ease-in-out; }
+
+@keyframes k-bob { 50% { transform: translateY(-4px); } }
+
+.k-watch-blink .k-lid    { animation: k-blink .7s ease-in-out; }
+.k-watch-blink .k-pupils { animation: k-pupils-hide .7s ease-in-out; }
+
+/* ---- close: one letter away from a real word ---- */
+
+.k-close-wiggle { animation: k-wiggle .8s ease-in-out; }
+
+@keyframes k-wiggle {
+  20%, 60% { transform: rotate(-4deg); }
+  40%, 80% { transform: rotate(4deg); }
+}
+
+.k-close-bounce { animation: k-bounce-small .75s cubic-bezier(.3, 1.5, .5, 1); }
+
+@keyframes k-bounce-small {
+  30% { transform: translateY(-9px) scaleY(1.05); }
+  60% { transform: translateY(0) scaleY(.96); }
+}
+
+.k-close-paws .k-paw-l { animation: k-paw-tap .8s ease-in-out; }
+.k-close-paws .k-paw-r { animation: k-paw-tap .8s ease-in-out .12s; }
+
+@keyframes k-paw-tap {
+  25% { transform: translateY(-7px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(-4px); }
+}
+
+.k-close-eyes .k-eyes  { animation: k-eyes-wide .9s ease-in-out; }
+.k-close-eyes .k-blush { animation: k-blush-up .9s ease-in-out; }
+
+@keyframes k-eyes-wide { 40%, 65% { transform: scale(1.16); } }
+@keyframes k-blush-up  { 40%, 65% { opacity: .8; } }
+
+.k-close-ears .k-ear-l, .k-close-ears .k-ear-in-l,
+.k-close-ears .k-ear-r, .k-close-ears .k-ear-in-r { animation: k-ears-twitch .9s ease-in-out 2; }
+
+@keyframes k-ears-twitch { 50% { transform: translateY(-4px) scaleY(1.1); } }
+
+/* ---- ready: the line already spells a word she has not found ---- */
+
+.k-ready-shimmy { animation: k-shimmy 1s ease-in-out; }
+
+@keyframes k-shimmy {
+  15%, 45%, 75% { transform: translateX(-4px) rotate(-3deg); }
+  30%, 60%, 90% { transform: translateX(4px) rotate(3deg); }
+}
+
+.k-ready-hop { animation: k-hop-twice 1s cubic-bezier(.3, 1.4, .5, 1); }
+
+@keyframes k-hop-twice {
+  20% { transform: translateY(-14px); }
+  40% { transform: translateY(0); }
+  60% { transform: translateY(-8px); }
+  80% { transform: translateY(0); }
+}
+
+.k-ready-stretch .k-head { animation: k-crane 1.1s ease-in-out; }
+.k-ready-stretch .k-eyes { animation: k-eyes-wide 1.1s ease-in-out; }
+
+@keyframes k-crane { 40%, 70% { transform: translateY(-6px) scale(1.05); } }
+
+/* ---- cheer: she found a word ---- */
+
+.k-cheer-jump { animation: k-jump 1s cubic-bezier(.25, 1.5, .45, 1); }
+
+@keyframes k-jump {
+  25% { transform: translateY(-26px) scaleY(1.1); }
+  45% { transform: translateY(0) scaleY(.92); }
+  65% { transform: translateY(-10px) scaleY(1.04); }
+  85% { transform: translateY(0) scaleY(.98); }
+}
+
+.k-cheer-spin { animation: k-spin 1.05s cubic-bezier(.3, 1.2, .4, 1); }
+
+@keyframes k-spin {
+  30%  { transform: translateY(-18px) rotate(180deg); }
+  100% { transform: translateY(0) rotate(360deg); }
+}
+
+.k-cheer-wave .k-paw-l { animation: k-wave 1s ease-in-out; }
+.k-cheer-wave .k-head  { animation: k-tilt 1s ease-in-out; }
+
+@keyframes k-wave {
+  20%, 60% { transform: translate(-6px, -18px) rotate(-25deg); }
+  40%, 80% { transform: translate(-6px, -22px) rotate(15deg); }
+}
+
+.k-cheer-dance { animation: k-dance 1.1s ease-in-out; }
+.k-cheer-dance .k-tail-group { animation: k-tailflick 1.1s ease-in-out; }
+
+@keyframes k-dance {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20%      { transform: translateX(-7px) rotate(-8deg); }
+  40%      { transform: translateX(7px) rotate(8deg); }
+  60%      { transform: translateX(-5px) rotate(-6deg); }
+  80%      { transform: translateX(5px) rotate(6deg); }
+}
+
+.k-cheer-purr .k-eyes       { animation: k-happy-eyes 1.2s ease-in-out; }
+.k-cheer-purr .k-lid        { animation: k-lids-happy 1.2s ease-in-out; }
+.k-cheer-purr .k-pupils     { animation: k-yawn-pupils 1.2s ease-in-out; }
+.k-cheer-purr .k-blush      { animation: k-blush-up 1.2s ease-in-out; }
+.k-cheer-purr .k-mouth-open { animation: k-grin 1.2s ease-in-out; }
+.k-cheer-purr .k-mouth      { animation: k-hide 1.2s ease-in-out; }
+
+@keyframes k-happy-eyes { 30%, 75% { transform: translateY(-1px); } }
+@keyframes k-lids-happy { 0%, 100% { opacity: 0; } 25%, 80% { opacity: 1; } }
+@keyframes k-grin       { 0%, 100% { opacity: 0; transform: scaleY(.3); }
+                          30%, 75% { opacity: 1; transform: scaleY(1); } }
+
+/* Hearts float up. Used by the big-word cheers. */
+.k-cheer-hearts .k-hearts { opacity: 1; }
+.k-cheer-hearts .k-heart-1 { animation: k-heart-float 1.5s ease-out; transform-origin: 0 0; }
+.k-cheer-hearts .k-heart-2 { animation: k-heart-float 1.5s ease-out .18s; transform-origin: 0 0; }
+.k-cheer-hearts .k-heart-3 { animation: k-heart-float 1.5s ease-out .36s; transform-origin: 0 0; }
+
+@keyframes k-heart-float {
+  0%   { opacity: 0; transform: translate(74px, 44px) scale(.3); }
+  25%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(96px, -18px) scale(1.1); }
+}
+
+/* ---- nudge: not a word yet. Curious, never disappointed. ---- */
+
+.k-nudge-tilt .k-head { animation: k-tilt-hold 1.4s ease-in-out; }
+
+@keyframes k-tilt-hold { 25%, 70% { transform: rotate(-14deg); } }
+
+.k-nudge-blink .k-head   { animation: k-tilt-hold 1.4s ease-in-out; }
+.k-nudge-blink .k-lid    { animation: k-blink 1.4s ease-in-out; }
+.k-nudge-blink .k-pupils { animation: k-pupils-hide 1.4s ease-in-out; }
+
+.k-nudge-paw .k-paw-r { animation: k-point 1.3s ease-in-out; }
+.k-nudge-paw .k-head  { animation: k-tilt 1.3s ease-in-out; }
+
+@keyframes k-point {
+  30%, 70% { transform: translate(9px, -13px) rotate(20deg); }
+}
+
+.k-nudge-peer .k-head  { animation: k-peer 1.3s ease-in-out; }
+.k-nudge-peer .k-eyes  { animation: k-eyes-wide 1.3s ease-in-out; }
+
+@keyframes k-peer { 35%, 70% { transform: translateY(5px) scale(1.06); } }
+
+/* ---- sleep: the game is paused ---- */
+
+.kitten.k-asleep .kitten-svg { animation: k-breathe-slow 4.6s ease-in-out infinite; }
+.kitten.k-asleep .k-lid      { opacity: 1; }
+.kitten.k-asleep .k-pupils   { opacity: 0; }
+.kitten.k-asleep .k-zzz      { opacity: 1; }
+.kitten.k-asleep .k-head     { transform: rotate(-11deg) translateY(3px); }
+.kitten.k-asleep .k-tail-group { animation: k-tail-idle 7s ease-in-out infinite; }
+.kitten.k-asleep .k-z-1      { animation: k-zfloat 2.6s ease-out infinite; }
+.kitten.k-asleep .k-z-2      { animation: k-zfloat 2.6s ease-out .5s infinite; }
+.kitten.k-asleep .k-z-3      { animation: k-zfloat 2.6s ease-out 1s infinite; }
+
+@keyframes k-breathe-slow { 50% { transform: scaleY(1.04) scaleX(.985); } }
+
+@keyframes k-zfloat {
+  0%   { opacity: 0; transform: translate(0, 6px) scale(.6); }
+  30%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(10px, -14px) scale(1.15); }
+}
+
+/* --------------------------------------------------------------------------
+   Turning it off, calming it down
+   -------------------------------------------------------------------------- */
+
+.no-kitten .kitten { display: none; }
+
+/* Calm mode keeps the cat but takes the bounce out of it. The reaction
+   classes sit on .kitten itself, so these are compound selectors, not
+   descendant ones. */
+.calm .kitten-svg   { animation: none; }
+.calm .k-tail-group { animation-duration: 7s; }
+
+.calm .kitten.k-cheer-jump,
+.calm .kitten.k-cheer-spin,
+.calm .kitten.k-cheer-dance,
+.calm .kitten.k-ready-hop,
+.calm .kitten.k-ready-shimmy,
+.calm .kitten.k-close-bounce,
+.calm .kitten.k-close-wiggle { animation-duration: .5s; }
+
+/* A full spin is a lot when you have asked for calm; she just bobs. */
+.calm .kitten.k-cheer-spin   { animation-name: k-bob; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The global reset already stops the animations; make sure the cat is left
+     looking like a cat rather than mid-pose. */
+  .k-lid, .k-mouth-open, .k-hearts, .k-zzz { opacity: 0 !important; }
+  .kitten.k-asleep .k-lid,
+  .kitten.k-asleep .k-zzz                  { opacity: 1 !important; }
+  .kitten.k-asleep .k-pupils               { opacity: 0 !important; }
+}
+
+/* Landscape phones are short on height; the cat gives up its space first. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .kitten { width: clamp(48px, 9vmin, 68px); }
+}

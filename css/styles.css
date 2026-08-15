@@ -298,10 +298,17 @@ button {
    -------------------------------------------------------------------------- */
 
 .build {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  /* Head-room for the kitten, which perches on the top rim of the word line.
+     Derived from --cat-size (see css/kitten.css) so the two cannot drift
+     apart; the drawing is 120x108, hence the 0.9. Keeping the cat out of the
+     line entirely means it can never sit on a tile, however long the word or
+     narrow the screen. */
+  padding-top: calc(var(--cat-size, 0px) * 0.9 + 6px);
 }
 
 .word-line {
