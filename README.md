@@ -1,2 +1,139 @@
-# spelling
-Working game for cooper
+# Word Builder
+
+A spelling game for Cooper.
+
+Sixteen letters, five minutes, and as many words as she can build. Letters are
+dragged (or tapped) onto a line where they can go on the front, the end, or
+into the middle of what she has already made. Every word she finds is
+celebrated, read aloud with its meaning, and the letters go straight back to
+the grid for the next one.
+
+It is built around one specific difficulty: telling **b** from **d**, **p**
+from **q**, and **n** from **m**.
+
+## Playing it
+
+Open `index.html` in a browser. That is the whole thing — no server, no
+install, no internet connection. It works from a USB stick, and it works on a
+tablet on the sofa.
+
+To put it online, push this repository and turn on GitHub Pages; it is a
+static site.
+
+## How it helps with b, d, p, q, n and m
+
+**Each tricky letter has its own colour**, everywhere it appears — on the
+tile, in the word she is building, and in the hints. The two halves of each
+pair are deliberately far apart in hue, so colour alone is enough to separate
+them at a glance.
+
+**Each tricky letter carries a diagram** showing where its ball sits and
+whether its tail hangs below the writing line. The diagram teaches a rule that
+actually generalises, rather than a fact to memorise:
+
+|                    | ball on the **left** | ball on the **right** |
+| ------------------ | -------------------- | --------------------- |
+| **sits on** the line | d                  | b                     |
+| **tail hangs down**  | q                  | p                     |
+
+and n has one hump where m has two. The `?` button opens a page of these,
+including the classic **bed** trick — tap any card to hear it read out.
+
+**Wrong answers get a targeted hint.** This is the part that matters most. If
+she builds a word that fails *only* because of a b/d, p/q or n/m mix-up, the
+game does not just say no. It works out which letter is the problem, wobbles
+that exact tile, and asks the question that fixes it:
+
+> So close! Look hard at the **n** — how many humps should it have?
+
+**Every grid contains tricky letters**, and two thirds of the time both halves
+of a pair turn up together, so the discrimination gets practised rather than
+avoided. Using one in a word is worth bonus points.
+
+## The rest of the design
+
+Everything here is aimed at a seven year old who finds writing hard and has
+ADHD.
+
+- **Nothing punishes a wrong guess.** No lost points, no red, no buzzer — a
+  warm two-note chime and a nudge. The letters stay exactly where they are so
+  she can fix the word rather than start again.
+- **Two ways to place a letter.** Drag it, or just tap it. Tapping a gap moves
+  the insertion point. A keyboard works too.
+- **Big targets, calm screen.** The letters are the brightest thing on the
+  page and nothing else competes with them.
+- **A pause button**, and the game pauses itself if she switches away.
+- **Sound it out** reads the word back letter by letter, then whole.
+- **The clock is a quiet ring**, not a red countdown.
+- At the end she gets a handful of words she *could* have made — short, common
+  ones — and tapping any of them says what it means.
+
+Settings (from the start screen or the cog) turn off the letter diagrams,
+letter-reading, spoken meanings, the "this is a real word" glow, sound, and a
+calm mode that tones down the celebrations. Calm mode switches itself on if
+the device asks for reduced motion. Best score and the collection of every
+word she has ever found are kept in the browser.
+
+## The dictionary
+
+`data/dictionary.js` holds 23,791 words with 21,305 definitions, all offline.
+It is built to be **generous about accepting and careful about suggesting**:
+having a word she genuinely made turned down is the one thing that would put
+her off, so the list is wide, while the words the game offers her at the end
+of a round come from a much smaller everyday tier.
+
+- Words are filtered by how common they are, with a higher bar for short words
+  (easy to hit by accident) than long ones (an achievement).
+- British spellings are recovered wherever the American one made the cut, so
+  `colour`, `practise` and `kerb` are all correct.
+- Profanity and adult vocabulary are filtered out — carefully, so that `grape`,
+  `canal`, `basement` and `scrape` survive.
+- Definitions come from WordNet, cleaned up and cut to one short sentence.
+
+WordNet is written for adults, so the ~250 words a child is most likely to
+build have hand-written definitions instead, in
+[`tools/kid_definitions.txt`](tools/kid_definitions.txt):
+
+```
+cat = A soft furry pet that says meow and likes to curl up and sleep
+```
+
+**That file is meant to be edited.** Add Cooper's own words to it, rerun the
+build, and the game will read your wording out instead.
+
+### Rebuilding it
+
+```sh
+pip install wordfreq
+npm install --prefix tools word-list wordnet-db naughty-words
+python3 tools/build_dictionary.py
+```
+
+## What is in here
+
+```
+index.html              the game
+css/styles.css
+js/letters.js           the six tricky letters: colours, diagrams, hints
+js/dictionary.js        word lookup, anagram search, near-miss detection
+js/grid.js              picking sixteen playable letters
+js/dragdrop.js          dragging and tapping
+js/speech.js            reading letters, words and meanings aloud
+js/sound.js             synthesised chimes, no audio files
+js/confetti.js          the reward
+js/game.js              the round
+data/dictionary.js      generated — do not edit by hand
+tools/build_dictionary.py
+tools/kid_definitions.txt
+```
+
+## Known rough edges
+
+- Speech uses whatever voices the browser has. It picks a British one where it
+  can; on a device with no voices installed it stays silent and everything
+  else still works.
+- The ~21,000 WordNet definitions were not read one by one. The common words
+  were checked and the worst offenders overridden, but somewhere in the long
+  tail there will be a definition that is technically correct and oddly
+  worded. Adding a line to `kid_definitions.txt` fixes any you hit.
+- Words are 3 to 8 letters. Longer ones are not in the dictionary.

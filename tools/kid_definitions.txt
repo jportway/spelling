@@ -1,0 +1,290 @@
+# Child-friendly definitions, used in place of the WordNet gloss.
+#
+# WordNet is written for adults. "Feline mammal usually having thick soft fur
+# and no ability to roar" is a correct definition of a cat and a useless thing
+# to say to a seven year old. These are the words most likely to come up, in
+# words she will understand, and they are what the game reads aloud.
+#
+# It also fixes the handful of common words where WordNet picks a strange
+# sense: a bike is not a motorbike, a mug is not a gullible person, and a bear
+# is an animal rather than the verb "to bear".
+#
+# Format: one "word = definition" per line. Lines starting with # are ignored.
+# Add your own freely — the game picks them up next time you run
+# tools/build_dictionary.py.
+
+# ---- animals ----
+dog = A furry pet with four legs that barks and loves going for walks
+cat = A soft furry pet that says meow and likes to curl up and sleep
+pig = A round pink farm animal with a curly tail that says oink
+cow = A big farm animal that eats grass and gives us milk
+hen = A female chicken that lays eggs
+fox = A wild animal like a small dog, with red fur and a bushy tail
+owl = A bird with big round eyes that stays awake at night and hoots
+bat = A small furry animal with wings that flies about at night
+bee = A little striped insect that buzzes and makes honey
+ant = A tiny insect that lives in a big group underground
+fly = A small buzzing insect with wings
+rat = A furry animal like a big mouse, with a long tail
+bug = A little creature like a beetle or a beetle-ish insect
+pup = A baby dog
+cub = A baby bear, lion or fox
+ram = A male sheep with curly horns
+doe = A female deer or rabbit
+deer = A gentle wild animal with long legs, that lives in woods
+bear = A big strong furry animal with sharp claws
+wolf = A wild animal like a large dog that howls at night
+lion = A big wild cat with a golden mane that roars
+frog = A small green animal that hops and lives near water
+fish = An animal that lives in water and swims with fins
+bird = An animal with feathers and wings that lays eggs
+duck = A bird that swims on ponds and says quack
+goat = A farm animal with horns that will eat almost anything
+lamb = A baby sheep
+worm = A long thin wriggly animal with no legs that lives in soil
+wasp = A yellow and black flying insect that can sting
+moth = An insect like a butterfly that flies at night
+crab = A sea animal with a hard shell and big nippy claws
+seal = A smooth sea animal with flippers that swims and barks
+mole = A small furry animal with big paws that digs tunnels underground
+hare = A wild animal like a big rabbit, with very long ears
+toad = An animal like a frog, with bumpy dry skin
+swan = A big white bird with a long curvy neck that swims
+crow = A big black bird with a loud call
+dove = A gentle white or grey bird
+goose = A big bird like a duck, with a long neck
+horse = A large animal you can ride, that gallops and neighs
+sheep = A farm animal with a woolly coat that says baa
+mouse = A tiny furry animal with a long tail and whiskers
+snake = A long animal with no legs that slides along the ground
+tiger = A big wild cat with orange fur and black stripes
+zebra = A wild horse with black and white stripes
+panda = A big black and white bear that eats bamboo
+koala = A furry grey animal from Australia that lives in trees
+camel = A desert animal with humps on its back
+whale = An enormous animal that lives in the sea and blows water up high
+shark = A big fish with sharp teeth that lives in the sea
+snail = A little animal that carries its shell and moves very slowly
+spider = A small creature with eight legs that spins webs
+rabbit = A furry animal with long ears that hops and lives in a burrow
+monkey = A clever animal with long arms that climbs and swings in trees
+donkey = An animal like a small horse, with long ears
+kitten = A baby cat
+puppy = A baby dog
+chick = A baby bird, especially a baby chicken
+pony = A small horse
+foal = A baby horse
+calf = A baby cow
+piglet = A baby pig
+
+# ---- food ----
+jam = Sweet sticky fruit you spread on bread
+pie = Pastry baked with something tasty inside
+bun = A small round soft bread roll
+egg = A smooth oval thing a bird lays, that you can boil or fry
+ham = Meat from a pig, often eaten in sandwiches
+nut = A hard little seed you crack open and eat
+cake = A soft sweet food you bake, often with icing on top
+milk = A white drink that comes from cows
+bread = A soft food made from flour and baked in the oven
+apple = A round crunchy fruit, red or green
+pear = A sweet fruit that is fat at the bottom and narrow at the top
+plum = A small soft purple fruit with a stone in the middle
+corn = A yellow vegetable with rows of little seeds on a cob
+rice = Tiny white grains that you boil and eat
+soup = A hot runny food you eat with a spoon
+honey = Sweet sticky golden food made by bees
+sugar = Sweet white grains that make food taste sweet
+salt = White grains that make food taste salty
+toast = Bread that has been made hot and crispy
+juice = A drink squeezed out of fruit
+lunch = The meal you eat in the middle of the day
+pizza = A flat round bread with cheese and topping baked on it
+pasta = Food like spaghetti, made from flour and boiled
+carrot = A long orange vegetable that grows underground
+banana = A long yellow fruit with a skin you peel off
+orange = A round juicy fruit with a thick orange skin
+grape = A small round juicy fruit that grows in bunches
+lemon = A yellow fruit with a very sour taste
+berry = A small soft juicy fruit
+sweet = A little sugary treat
+butter = A soft yellow food made from milk, spread on bread
+cream = The thick rich part of milk
+cheese = A food made from milk, often yellow and tasty
+dinner = The main meal of the day
+crisps = Thin crunchy salty slices of potato in a packet
+chips = Long pieces of potato cooked until hot and crispy
+beans = Small seeds you cook and eat
+cherry = A small round red fruit with a stone inside
+peach = A soft round fruit with fuzzy skin
+melon = A big round juicy fruit
+mango = A sweet orange fruit from hot countries
+
+# ---- home ----
+cup = A small container you drink out of
+mug = A big cup with a handle, for hot drinks
+pot = A deep round container for cooking
+pan = A flat metal dish for cooking on the hob
+box = A container with straight sides and a lid
+bag = A soft container with a handle for carrying things
+bed = The soft furniture you sleep in at night
+rug = A small soft mat for the floor
+tap = The thing you turn to make water come out
+bin = A container you put rubbish in
+key = A small metal shape that opens a lock
+door = The part of a room you open to go in and out
+wall = The flat side of a room or building
+roof = The cover on top of a building
+sofa = A long soft seat for sitting on with other people
+lamp = A light you can switch on
+table = A piece of furniture with a flat top and legs, that you eat at
+chair = A seat with a back, for one person
+house = A building where people live
+plate = A flat round dish you eat your food off
+spoon = A tool with a round scoop for eating soup and pudding
+fork = A tool with sharp points for picking up food
+clock = A thing on the wall that tells you the time
+brush = A tool with bristles for tidying hair or sweeping
+towel = A soft cloth you dry yourself with
+shelf = A flat board on a wall for putting things on
+floor = The part of a room you walk on
+stairs = Steps that take you up to the next floor
+garden = The bit of ground outside a house where plants grow
+window = A hole in a wall with glass in it, that you can see through
+mirror = Shiny glass you can see yourself in
+soap = What you wash your hands with to get them clean
+
+# ---- your body ----
+arm = The part of you between your shoulder and your hand
+leg = The part of you that you walk on
+ear = The part of your head that you hear with
+eye = The part of your face that you see with
+toe = One of the five little parts at the end of your foot
+lip = The soft edge of your mouth
+hand = The part on the end of your arm, with five fingers
+foot = The part on the end of your leg that you stand on
+head = The top part of you, where your face and brain are
+hair = The soft strands that grow on top of your head
+nose = The part of your face you smell and breathe with
+face = The front of your head
+knee = The bendy joint in the middle of your leg
+chin = The bottom of your face, under your mouth
+neck = The part that joins your head to your body
+tooth = One of the hard white things in your mouth for biting
+thumb = The short fat finger on the side of your hand
+finger = One of the five long parts on your hand
+tummy = The soft part of you where your food goes
+
+# ---- outside ----
+sun = The huge bright star in the sky that gives us light and warmth
+sky = The big open space above you
+sea = The huge stretch of salty water around the land
+ice = Water that has frozen hard and cold
+mud = Wet sticky soil
+log = A thick round piece of a tree
+sand = Tiny soft grains of rock you find on a beach
+rock = A big hard lump of stone
+star = A tiny bright light far away in the night sky
+moon = The big round light that shines in the sky at night
+rain = Water falling from the clouds
+snow = Soft white flakes that fall when it is very cold
+wind = Air that moves and blows things about
+wave = A line of water that rolls onto the beach
+tree = A tall plant with a thick trunk, branches and leaves
+leaf = One of the flat green parts that grow on a plant
+root = The part of a plant that grows down under the ground
+seed = A tiny thing you plant that grows into a new plant
+hill = A piece of land that is higher than the land around it
+lake = A big area of water with land all around it
+river = Water that flows along the land towards the sea
+cloud = A white or grey puff in the sky that rain comes from
+storm = Very bad weather with strong wind and heavy rain
+beach = The sandy or stony edge of the sea
+field = A big open piece of ground where grass or crops grow
+grass = The green plant that covers gardens and fields
+stone = A small hard piece of rock
+flower = The pretty coloured part of a plant
+forest = A big area covered with lots of trees
+island = A piece of land with water all the way round it
+puddle = A small pool of water on the ground after rain
+
+# ---- playing ----
+ball = A round thing you throw, kick or bounce
+doll = A toy that looks like a person
+kite = A toy on a string that flies up in the wind
+drum = A musical instrument you hit to make a booming sound
+bike = A thing with two wheels that you sit on and pedal
+game = Something you play for fun, with rules
+toy = Something made for children to play with
+net = Criss-cross string with holes in, for catching things
+swing = A seat on ropes that you sit on and swoosh to and fro
+slide = A smooth slope in a playground that you whoosh down
+teddy = A soft toy bear for cuddling
+robot = A machine built to move and do jobs by itself
+rope = Very thick strong string
+puzzle = A game where you work something out or fit pieces together
+
+# ---- school ----
+book = Pages joined together with words and pictures to read
+pen = A thin tool with ink in, for writing
+desk = A table you sit at to work or write
+page = One side of a sheet of paper in a book
+word = Letters put together to mean something
+glue = Sticky stuff that joins things together
+ruler = A flat straight tool for measuring and drawing lines
+pencil = A wooden stick with grey lead in, for writing and drawing
+school = The place you go to learn things
+class = A group of children who learn together
+story = A telling of things that happen, real or made up
+letter = One of the shapes we write words with, like a or b
+paper = Thin flat material you write and draw on
+maths = Working with numbers, adding and taking away
+paint = Coloured liquid you brush onto paper to make pictures
+
+# ---- getting about ----
+car = A machine with four wheels that people drive about in
+bus = A long vehicle that carries lots of people
+van = A vehicle like a big car for carrying things
+boat = Something that floats and carries you across water
+ship = A very big boat that sails on the sea
+train = A long line of carriages that runs along rails
+plane = A machine with wings that flies through the sky
+road = A hard strip of ground for cars to drive along
+town = A place with lots of houses, shops and streets
+shop = A place you go to buy things
+farm = Land where a farmer grows crops and keeps animals
+park = A green open place where you can play
+map = A drawing that shows where places are
+flag = A piece of cloth with a pattern, flown on a pole
+
+# ---- wearing ----
+hat = Something you wear on your head
+sock = A soft covering you wear on your foot inside your shoe
+shoe = Something you wear on your foot to go outside
+coat = A warm piece of clothing you wear on top when it is cold
+shirt = A piece of clothing with sleeves that you wear on top
+dress = A piece of clothing that covers your body and legs in one piece
+boot = A strong shoe that covers your ankle
+belt = A strap you wear round your middle to hold your trousers up
+ring = A circle of metal you wear on your finger
+scarf = A long piece of cloth you wrap round your neck to keep warm
+
+# ---- odds and ends ----
+web = The fine sticky net a spider spins to catch flies
+nest = The cosy home a bird builds for its eggs
+wing = The part a bird or plane uses to fly
+tail = The part that sticks out at the back of an animal
+bell = A metal cup that rings when you shake it
+coin = A round piece of metal used as money
+gift = Something nice you give to somebody
+nail = A short thin metal spike you hammer into wood
+rope = Very thick strong string
+lock = The part of a door you need a key to open
+knot = A tight twist you tie in string or rope
+bath = A big tub you fill with water and sit in to get clean
+song = Words you sing to a tune
+noise = A sound, often a loud one
+smile = The happy shape your mouth makes
+dream = The pictures and stories in your head while you are asleep
+friend = Somebody you like a lot and enjoy being with
+family = The people you belong to, like your mum, dad and sisters
