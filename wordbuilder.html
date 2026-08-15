@@ -331,10 +331,17 @@ button {
    -------------------------------------------------------------------------- */
 
 .build {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  /* Head-room for the kitten, which perches on the top rim of the word line.
+     Derived from --cat-size (see css/kitten.css) so the two cannot drift
+     apart; the drawing is 120x108, hence the 0.9. Keeping the cat out of the
+     line entirely means it can never sit on a tile, however long the word or
+     narrow the screen. */
+  padding-top: calc(var(--cat-size, 0px) * 0.9 + 6px);
 }
 
 .word-line {
@@ -1192,6 +1199,400 @@ button {
   .found-list { max-height: 22vh; }
 }
 </style>
+<style>
+/* ==========================================================================
+   kitten.css — the cat that watches her play.
+
+   Two rules govern everything here:
+
+     1. It must never compete with the letters. Idle is almost still, the
+        palette avoids all six tricky-letter colours, and it sits above the
+        word line where it cannot cover a tile at any width.
+     2. Every reaction has several animations rather than one. A single fixed
+        celebration stops being a reward after about four goes; js/kitten.js
+        picks a different one each time.
+   ========================================================================== */
+
+:root {
+  /* A soft lilac-grey cat. Deliberately none of the tricky-letter hues, so
+     the kitten can never be mistaken for a letter cue. */
+  --cat-fur:     #ded9ec;
+  --cat-shade:   #c6bfdd;
+  --cat-cream:   #fdfcf7;
+  --cat-rose:    #efa3b6;
+  --cat-ink:     #2a3152;
+
+  /* One source of truth for the size: .build reserves head-room from this, so
+     the cat can never grow into the word line or float away from it. */
+  --cat-size:    clamp(64px, 13vmin, 104px);
+}
+
+.kitten {
+  position: absolute;
+  top: 0;
+  left: clamp(2px, 2vw, 20px);
+  width: var(--cat-size);
+  transform-origin: 50% 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.kitten-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* --------------------------------------------------------------------------
+   The cat itself
+   -------------------------------------------------------------------------- */
+
+.k-body   { fill: var(--cat-fur); }
+.k-belly  { fill: var(--cat-cream); }
+.k-paw    { fill: var(--cat-cream); }
+.k-face   { fill: var(--cat-fur); }
+.k-ear    { fill: var(--cat-fur); }
+.k-ear-in { fill: var(--cat-rose); }
+.k-tail   { fill: none; stroke: var(--cat-fur); stroke-width: 11; stroke-linecap: round; }
+.k-eye    { fill: var(--cat-cream); }
+.k-pupil  { fill: var(--cat-ink); }
+.k-glint  { fill: #fff; }
+.k-nose   { fill: var(--cat-rose); }
+.k-blush  { fill: var(--cat-rose); opacity: .45; }
+
+.k-stripe {
+  fill: none;
+  stroke: var(--cat-shade);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.k-mouth {
+  fill: none;
+  stroke: var(--cat-ink);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.k-whiskers {
+  fill: none;
+  stroke: var(--cat-shade);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+/* Hidden until a reaction asks for them. */
+.k-lid        { fill: none; stroke: var(--cat-ink); stroke-width: 2.6; stroke-linecap: round; opacity: 0; }
+.k-mouth-open { fill: var(--cat-rose); opacity: 0; }
+.k-hearts     { opacity: 0; }
+.k-heart      { fill: var(--cat-rose); }
+.k-zzz        { opacity: 0; }
+.k-z          { fill: var(--ink-soft); font-family: var(--font-letters); font-size: 15px; font-weight: 800; }
+
+/* Transform origins, so heads turn about the neck and ears flick at the base. */
+.k-head       { transform-origin: 60px 46px; }
+.k-ear-l, .k-ear-in-l { transform-origin: 40px 28px; }
+.k-ear-r, .k-ear-in-r { transform-origin: 80px 28px; }
+.k-tail-group { transform-origin: 88px 92px; }
+.k-paw-l      { transform-origin: 47px 96px; }
+.k-paw-r      { transform-origin: 73px 96px; }
+.k-eyes       { transform-origin: 60px 34px; }
+.k-pupils     { transition: transform .18s ease-out; }
+
+/* --------------------------------------------------------------------------
+   Always running: breathing, and a tail that never quite settles
+   -------------------------------------------------------------------------- */
+
+.kitten-svg   { animation: k-breathe 3.4s ease-in-out infinite; transform-origin: 60px 100px; }
+.k-tail-group { animation: k-tail-idle 4.2s ease-in-out infinite; }
+
+@keyframes k-breathe {
+  50% { transform: scaleY(1.025) scaleX(.99); }
+}
+
+@keyframes k-tail-idle {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(-11deg); }
+}
+
+/* ==========================================================================
+   Reactions. Each block is one option out of several for that state, and
+   js/kitten.js chooses between them.
+   ========================================================================== */
+
+/* ---- idle fidgets, fired now and then so she never looks frozen ---- */
+
+.k-idle-blink .k-lid    { animation: k-blink 1.1s ease-in-out; }
+.k-idle-blink .k-pupils { animation: k-pupils-hide 1.1s ease-in-out; }
+
+@keyframes k-blink {
+  0%, 34%, 46%, 100% { opacity: 0; }
+  36%, 44%           { opacity: 1; }
+}
+@keyframes k-pupils-hide {
+  0%, 34%, 46%, 100% { opacity: 1; }
+  36%, 44%           { opacity: 0; }
+}
+
+.k-idle-earflick .k-ear-l,
+.k-idle-earflick .k-ear-in-l { animation: k-earflick .7s ease-in-out; }
+
+@keyframes k-earflick {
+  30% { transform: rotate(-13deg); }
+  60% { transform: rotate(5deg); }
+}
+
+.k-idle-tailflick .k-tail-group { animation: k-tailflick 1s ease-in-out; }
+
+@keyframes k-tailflick {
+  25% { transform: rotate(24deg); }
+  55% { transform: rotate(-18deg); }
+  80% { transform: rotate(8deg); }
+}
+
+.k-idle-tilt .k-head { animation: k-tilt 1.8s ease-in-out; }
+
+@keyframes k-tilt {
+  30%, 60% { transform: rotate(-8deg); }
+}
+
+.k-idle-look .k-pupils { animation: k-look 2.4s ease-in-out; }
+
+@keyframes k-look {
+  20%, 30% { transform: translateX(3px); }
+  55%, 65% { transform: translateX(-3px); }
+}
+
+.k-idle-yawn .k-mouth-open { animation: k-yawn 1.6s ease-in-out; }
+.k-idle-yawn .k-lid        { animation: k-yawn-lids 1.6s ease-in-out; }
+.k-idle-yawn .k-pupils     { animation: k-yawn-pupils 1.6s ease-in-out; }
+.k-idle-yawn .k-mouth      { animation: k-hide 1.6s ease-in-out; }
+
+@keyframes k-yawn        { 0%, 100% { opacity: 0; transform: scaleY(.2); }
+                           35%, 65% { opacity: 1; transform: scaleY(1); } }
+@keyframes k-yawn-lids   { 0%, 100% { opacity: 0; } 30%, 70% { opacity: 1; } }
+@keyframes k-yawn-pupils { 0%, 100% { opacity: 1; } 30%, 70% { opacity: 0; } }
+@keyframes k-hide        { 30%, 70% { opacity: 0; } }
+
+/* ---- watching: a letter just went down ---- */
+
+.k-watch-perk .k-ear-l, .k-watch-perk .k-ear-in-l { animation: k-perk-l .6s ease-out; }
+.k-watch-perk .k-ear-r, .k-watch-perk .k-ear-in-r { animation: k-perk-r .6s ease-out; }
+
+@keyframes k-perk-l { 40% { transform: rotate(-9deg) translateY(-3px); } }
+@keyframes k-perk-r { 40% { transform: rotate(9deg) translateY(-3px); } }
+
+.k-watch-lean .k-head { animation: k-lean .8s ease-in-out; }
+
+@keyframes k-lean { 45% { transform: translateY(3px) rotate(4deg); } }
+
+.k-watch-bob { animation: k-bob .55s ease-in-out; }
+
+@keyframes k-bob { 50% { transform: translateY(-4px); } }
+
+.k-watch-blink .k-lid    { animation: k-blink .7s ease-in-out; }
+.k-watch-blink .k-pupils { animation: k-pupils-hide .7s ease-in-out; }
+
+/* ---- close: one letter away from a real word ---- */
+
+.k-close-wiggle { animation: k-wiggle .8s ease-in-out; }
+
+@keyframes k-wiggle {
+  20%, 60% { transform: rotate(-4deg); }
+  40%, 80% { transform: rotate(4deg); }
+}
+
+.k-close-bounce { animation: k-bounce-small .75s cubic-bezier(.3, 1.5, .5, 1); }
+
+@keyframes k-bounce-small {
+  30% { transform: translateY(-9px) scaleY(1.05); }
+  60% { transform: translateY(0) scaleY(.96); }
+}
+
+.k-close-paws .k-paw-l { animation: k-paw-tap .8s ease-in-out; }
+.k-close-paws .k-paw-r { animation: k-paw-tap .8s ease-in-out .12s; }
+
+@keyframes k-paw-tap {
+  25% { transform: translateY(-7px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(-4px); }
+}
+
+.k-close-eyes .k-eyes  { animation: k-eyes-wide .9s ease-in-out; }
+.k-close-eyes .k-blush { animation: k-blush-up .9s ease-in-out; }
+
+@keyframes k-eyes-wide { 40%, 65% { transform: scale(1.16); } }
+@keyframes k-blush-up  { 40%, 65% { opacity: .8; } }
+
+.k-close-ears .k-ear-l, .k-close-ears .k-ear-in-l,
+.k-close-ears .k-ear-r, .k-close-ears .k-ear-in-r { animation: k-ears-twitch .9s ease-in-out 2; }
+
+@keyframes k-ears-twitch { 50% { transform: translateY(-4px) scaleY(1.1); } }
+
+/* ---- ready: the line already spells a word she has not found ---- */
+
+.k-ready-shimmy { animation: k-shimmy 1s ease-in-out; }
+
+@keyframes k-shimmy {
+  15%, 45%, 75% { transform: translateX(-4px) rotate(-3deg); }
+  30%, 60%, 90% { transform: translateX(4px) rotate(3deg); }
+}
+
+.k-ready-hop { animation: k-hop-twice 1s cubic-bezier(.3, 1.4, .5, 1); }
+
+@keyframes k-hop-twice {
+  20% { transform: translateY(-14px); }
+  40% { transform: translateY(0); }
+  60% { transform: translateY(-8px); }
+  80% { transform: translateY(0); }
+}
+
+.k-ready-stretch .k-head { animation: k-crane 1.1s ease-in-out; }
+.k-ready-stretch .k-eyes { animation: k-eyes-wide 1.1s ease-in-out; }
+
+@keyframes k-crane { 40%, 70% { transform: translateY(-6px) scale(1.05); } }
+
+/* ---- cheer: she found a word ---- */
+
+.k-cheer-jump { animation: k-jump 1s cubic-bezier(.25, 1.5, .45, 1); }
+
+@keyframes k-jump {
+  25% { transform: translateY(-26px) scaleY(1.1); }
+  45% { transform: translateY(0) scaleY(.92); }
+  65% { transform: translateY(-10px) scaleY(1.04); }
+  85% { transform: translateY(0) scaleY(.98); }
+}
+
+.k-cheer-spin { animation: k-spin 1.05s cubic-bezier(.3, 1.2, .4, 1); }
+
+@keyframes k-spin {
+  30%  { transform: translateY(-18px) rotate(180deg); }
+  100% { transform: translateY(0) rotate(360deg); }
+}
+
+.k-cheer-wave .k-paw-l { animation: k-wave 1s ease-in-out; }
+.k-cheer-wave .k-head  { animation: k-tilt 1s ease-in-out; }
+
+@keyframes k-wave {
+  20%, 60% { transform: translate(-6px, -18px) rotate(-25deg); }
+  40%, 80% { transform: translate(-6px, -22px) rotate(15deg); }
+}
+
+.k-cheer-dance { animation: k-dance 1.1s ease-in-out; }
+.k-cheer-dance .k-tail-group { animation: k-tailflick 1.1s ease-in-out; }
+
+@keyframes k-dance {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20%      { transform: translateX(-7px) rotate(-8deg); }
+  40%      { transform: translateX(7px) rotate(8deg); }
+  60%      { transform: translateX(-5px) rotate(-6deg); }
+  80%      { transform: translateX(5px) rotate(6deg); }
+}
+
+.k-cheer-purr .k-eyes       { animation: k-happy-eyes 1.2s ease-in-out; }
+.k-cheer-purr .k-lid        { animation: k-lids-happy 1.2s ease-in-out; }
+.k-cheer-purr .k-pupils     { animation: k-yawn-pupils 1.2s ease-in-out; }
+.k-cheer-purr .k-blush      { animation: k-blush-up 1.2s ease-in-out; }
+.k-cheer-purr .k-mouth-open { animation: k-grin 1.2s ease-in-out; }
+.k-cheer-purr .k-mouth      { animation: k-hide 1.2s ease-in-out; }
+
+@keyframes k-happy-eyes { 30%, 75% { transform: translateY(-1px); } }
+@keyframes k-lids-happy { 0%, 100% { opacity: 0; } 25%, 80% { opacity: 1; } }
+@keyframes k-grin       { 0%, 100% { opacity: 0; transform: scaleY(.3); }
+                          30%, 75% { opacity: 1; transform: scaleY(1); } }
+
+/* Hearts float up. Used by the big-word cheers. */
+.k-cheer-hearts .k-hearts { opacity: 1; }
+.k-cheer-hearts .k-heart-1 { animation: k-heart-float 1.5s ease-out; transform-origin: 0 0; }
+.k-cheer-hearts .k-heart-2 { animation: k-heart-float 1.5s ease-out .18s; transform-origin: 0 0; }
+.k-cheer-hearts .k-heart-3 { animation: k-heart-float 1.5s ease-out .36s; transform-origin: 0 0; }
+
+@keyframes k-heart-float {
+  0%   { opacity: 0; transform: translate(74px, 44px) scale(.3); }
+  25%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(96px, -18px) scale(1.1); }
+}
+
+/* ---- nudge: not a word yet. Curious, never disappointed. ---- */
+
+.k-nudge-tilt .k-head { animation: k-tilt-hold 1.4s ease-in-out; }
+
+@keyframes k-tilt-hold { 25%, 70% { transform: rotate(-14deg); } }
+
+.k-nudge-blink .k-head   { animation: k-tilt-hold 1.4s ease-in-out; }
+.k-nudge-blink .k-lid    { animation: k-blink 1.4s ease-in-out; }
+.k-nudge-blink .k-pupils { animation: k-pupils-hide 1.4s ease-in-out; }
+
+.k-nudge-paw .k-paw-r { animation: k-point 1.3s ease-in-out; }
+.k-nudge-paw .k-head  { animation: k-tilt 1.3s ease-in-out; }
+
+@keyframes k-point {
+  30%, 70% { transform: translate(9px, -13px) rotate(20deg); }
+}
+
+.k-nudge-peer .k-head  { animation: k-peer 1.3s ease-in-out; }
+.k-nudge-peer .k-eyes  { animation: k-eyes-wide 1.3s ease-in-out; }
+
+@keyframes k-peer { 35%, 70% { transform: translateY(5px) scale(1.06); } }
+
+/* ---- sleep: the game is paused ---- */
+
+.kitten.k-asleep .kitten-svg { animation: k-breathe-slow 4.6s ease-in-out infinite; }
+.kitten.k-asleep .k-lid      { opacity: 1; }
+.kitten.k-asleep .k-pupils   { opacity: 0; }
+.kitten.k-asleep .k-zzz      { opacity: 1; }
+.kitten.k-asleep .k-head     { transform: rotate(-11deg) translateY(3px); }
+.kitten.k-asleep .k-tail-group { animation: k-tail-idle 7s ease-in-out infinite; }
+.kitten.k-asleep .k-z-1      { animation: k-zfloat 2.6s ease-out infinite; }
+.kitten.k-asleep .k-z-2      { animation: k-zfloat 2.6s ease-out .5s infinite; }
+.kitten.k-asleep .k-z-3      { animation: k-zfloat 2.6s ease-out 1s infinite; }
+
+@keyframes k-breathe-slow { 50% { transform: scaleY(1.04) scaleX(.985); } }
+
+@keyframes k-zfloat {
+  0%   { opacity: 0; transform: translate(0, 6px) scale(.6); }
+  30%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(10px, -14px) scale(1.15); }
+}
+
+/* --------------------------------------------------------------------------
+   Turning it off, calming it down
+   -------------------------------------------------------------------------- */
+
+.no-kitten .kitten { display: none; }
+
+/* Calm mode keeps the cat but takes the bounce out of it. The reaction
+   classes sit on .kitten itself, so these are compound selectors, not
+   descendant ones. */
+.calm .kitten-svg   { animation: none; }
+.calm .k-tail-group { animation-duration: 7s; }
+
+.calm .kitten.k-cheer-jump,
+.calm .kitten.k-cheer-spin,
+.calm .kitten.k-cheer-dance,
+.calm .kitten.k-ready-hop,
+.calm .kitten.k-ready-shimmy,
+.calm .kitten.k-close-bounce,
+.calm .kitten.k-close-wiggle { animation-duration: .5s; }
+
+/* A full spin is a lot when you have asked for calm; she just bobs. */
+.calm .kitten.k-cheer-spin   { animation-name: k-bob; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The global reset already stops the animations; make sure the cat is left
+     looking like a cat rather than mid-pose. */
+  .k-lid, .k-mouth-open, .k-hearts, .k-zzz { opacity: 0 !important; }
+  .kitten.k-asleep .k-lid,
+  .kitten.k-asleep .k-zzz                  { opacity: 1 !important; }
+  .kitten.k-asleep .k-pupils               { opacity: 0 !important; }
+}
+
+/* Landscape phones are short on height; the cat gives up its space first. */
+@media (max-height: 560px) and (orientation: landscape) {
+  .kitten { width: clamp(48px, 9vmin, 68px); }
+}
+</style>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
 </head>
 <body>
@@ -1230,6 +1631,76 @@ button {
   <main class="stage">
 
     <section class="build" aria-label="Word you are building">
+
+      <!-- The kitten sits on the rim of the word line and watches. It is
+           decoration, so it is hidden from screen readers; every reaction it
+           has is also said in words by the message line below. -->
+      <div class="kitten" id="kitten" aria-hidden="true">
+        <svg class="kitten-svg" viewBox="0 0 120 108" focusable="false">
+          <!-- Tail: drawn first so it sits behind the body. A single open
+               sweep on purpose — curl it into a spiral and the dark page
+               shows through the middle, which reads as a hole, not fur. -->
+          <g class="k-tail-group">
+            <path class="k-tail" d="M84 96 q26 0 28 -18 q2 -12 -8 -14"/>
+          </g>
+
+          <!-- body -->
+          <path class="k-body" d="M60 46 q-26 0 -30 28 q-3 22 8 26 h44 q11 -4 8 -26 q-4 -28 -30 -28z"/>
+          <path class="k-belly" d="M60 62 q-14 0 -16 17 q-1 14 5 17 h22 q6 -3 5 -17 q-2 -17 -16 -17z"/>
+          <ellipse class="k-paw k-paw-l" cx="47" cy="96" rx="9" ry="6"/>
+          <ellipse class="k-paw k-paw-r" cx="73" cy="96" rx="9" ry="6"/>
+
+          <!-- head -->
+          <g class="k-head">
+            <path class="k-ear k-ear-l" d="M28 30 l2 -24 l22 13z"/>
+            <path class="k-ear k-ear-r" d="M92 30 l-2 -24 l-22 13z"/>
+            <path class="k-ear-in k-ear-in-l" d="M33 27 l1.5 -14 l13 8z"/>
+            <path class="k-ear-in k-ear-in-r" d="M87 27 l-1.5 -14 l-13 8z"/>
+
+            <ellipse class="k-face" cx="60" cy="34" rx="33" ry="29"/>
+            <path class="k-stripe" d="M50 9 l4 10 M60 6 l0 11 M70 9 l-4 10"/>
+
+            <g class="k-eyes">
+              <ellipse class="k-eye k-eye-l" cx="47" cy="34" rx="8" ry="9"/>
+              <ellipse class="k-eye k-eye-r" cx="73" cy="34" rx="8" ry="9"/>
+              <g class="k-pupils">
+                <circle class="k-pupil" cx="47" cy="35" r="4.2"/>
+                <circle class="k-pupil" cx="73" cy="35" r="4.2"/>
+                <circle class="k-glint" cx="48.8" cy="32.4" r="1.7"/>
+                <circle class="k-glint" cx="74.8" cy="32.4" r="1.7"/>
+              </g>
+              <!-- closed eyes, shown for blinks, sleep and big grins -->
+              <path class="k-lid k-lid-l" d="M40 34 q7 7 14 0"/>
+              <path class="k-lid k-lid-r" d="M66 34 q7 7 14 0"/>
+            </g>
+
+            <ellipse class="k-blush k-blush-l" cx="36" cy="45" rx="7" ry="4.5"/>
+            <ellipse class="k-blush k-blush-r" cx="84" cy="45" rx="7" ry="4.5"/>
+
+            <path class="k-nose" d="M56.5 45 h7 l-3.5 4z"/>
+            <path class="k-mouth" d="M60 49 q-4.5 7 -9 -0.5 M60 49 q4.5 7 9 -0.5"/>
+            <path class="k-mouth-open" d="M52 50 q8 12 16 0 q-8 5 -16 0z"/>
+
+            <path class="k-whiskers"
+                  d="M30 42 h-16 M30 47 h-15 M90 42 h16 M90 47 h15"/>
+          </g>
+
+          <!-- shown only when she finds a word -->
+          <g class="k-hearts">
+            <path class="k-heart k-heart-1" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
+            <path class="k-heart k-heart-2" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
+            <path class="k-heart k-heart-3" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
+          </g>
+
+          <!-- shown only when the game is paused -->
+          <g class="k-zzz">
+            <text class="k-z k-z-1" x="94" y="26">z</text>
+            <text class="k-z k-z-2" x="102" y="16">z</text>
+            <text class="k-z k-z-3" x="110" y="8">z</text>
+          </g>
+        </svg>
+      </div>
+
       <div class="word-line" id="wordLine" role="list" aria-label="Letters in your word">
         <p class="word-line-empty" id="wordLineEmpty">Tap letters to build a word</p>
       </div>
@@ -1429,6 +1900,16 @@ button {
           <span class="switch-text">
             <strong>Glow on real words</strong>
             <small>Light up the Check button when the word is right</small>
+          </span>
+        </label>
+      </li>
+      <li class="setting">
+        <label class="switch">
+          <input type="checkbox" id="setKitten" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-text">
+            <strong>Kitten friend</strong>
+            <small>A cat that watches and cheers you on</small>
           </span>
         </label>
       </li>
@@ -23159,6 +23640,27 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       return found;
     },
 
+    /* Would one more letter finish this off?
+
+       Only letters she can actually reach count, so `free` is a 26 slot count
+       of the tiles still sitting in the grid. Cheap enough to run on every
+       change: at most 26 letters by the length of the word, against a Map. */
+    oneAwayFromWord: function (letters, free) {
+      if (!letters || letters.length < 2 || letters.length >= 8) return false;
+
+      for (var slot = 0; slot < 26; slot++) {
+        if (!free[slot]) continue;
+        var letter = String.fromCharCode(A + slot);
+
+        for (var at = 0; at <= letters.length; at++) {
+          if (this.has(letters.slice(0, at) + letter + letters.slice(at))) {
+            return true;
+          }
+        }
+      }
+      return false;
+    },
+
     /* Does swapping one or more of b/d, p/q, n/m turn this into a real word?
        This is the whole point of the game, so it gets its own lookup.
 
@@ -23724,6 +24226,294 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 </script>
 <script>
 /* ==========================================================================
+   kitten.js — the cat that watches her play.
+
+   The point of the cat is that it reacts, and the point of *this* file is
+   that it reacts differently each time. A celebration you have seen four
+   times is wallpaper, so every state holds several animations and one is
+   drawn at random, never the same one twice running.
+
+   States, roughly in order of excitement:
+
+     idle      nothing on the line. Occasional blinks, ear flicks, a yawn.
+     watching  a letter just went down. Perks up, leans in.
+     close     one letter away from a real word. Wiggles, bounces, paws.
+     ready     the line already spells a word she has not found yet.
+     cheer     she found one.
+     bigcheer  she found a long one. Same idea, more of it, plus hearts.
+     nudge     not a word. Curious and encouraging, never disappointed.
+     sleep     the game is paused.
+   ========================================================================== */
+
+(function (global) {
+  "use strict";
+
+  /* Each entry is [class, milliseconds]. The duration must match the CSS or
+     the class is stripped mid-animation. */
+  var REACTIONS = {
+    idle: [
+      ["k-idle-blink", 1100],
+      ["k-idle-earflick", 700],
+      ["k-idle-tailflick", 1000],
+      ["k-idle-tilt", 1800],
+      ["k-idle-look", 2400],
+      ["k-idle-yawn", 1600]
+    ],
+    watching: [
+      ["k-watch-perk", 600],
+      ["k-watch-lean", 800],
+      ["k-watch-bob", 550],
+      ["k-watch-blink", 700]
+    ],
+    close: [
+      ["k-close-wiggle", 800],
+      ["k-close-bounce", 750],
+      ["k-close-paws", 920],
+      ["k-close-eyes", 900],
+      ["k-close-ears", 1800]
+    ],
+    ready: [
+      ["k-ready-shimmy", 1000],
+      ["k-ready-hop", 1000],
+      ["k-ready-stretch", 1100]
+    ],
+    cheer: [
+      ["k-cheer-jump", 1000],
+      ["k-cheer-spin", 1050],
+      ["k-cheer-wave", 1000],
+      ["k-cheer-dance", 1100],
+      ["k-cheer-purr", 1200]
+    ],
+    bigcheer: [
+      ["k-cheer-jump k-cheer-hearts", 1550],
+      ["k-cheer-spin k-cheer-hearts", 1550],
+      ["k-cheer-dance k-cheer-hearts", 1550],
+      ["k-cheer-purr k-cheer-hearts", 1550]
+    ],
+    nudge: [
+      ["k-nudge-tilt", 1400],
+      ["k-nudge-blink", 1400],
+      ["k-nudge-paw", 1300],
+      ["k-nudge-peer", 1300]
+    ]
+  };
+
+  // How long to leave her alone before an idle fidget, in milliseconds.
+  var IDLE_MIN = 3200;
+  var IDLE_MAX = 8000;
+
+  // A sustained state (close, ready) re-fires now and then so she stays alive
+  // without being asked again.
+  var REPEAT_MIN = 2600;
+  var REPEAT_MAX = 5200;
+
+  var root = null;
+  var svg = null;
+  var pupils = null;
+
+  var enabled = true;
+  var running = false;          // a reaction is playing right now
+  var state = "idle";
+  var lastPick = {};            // state -> last class used, to avoid repeats
+  var clearTimer = null;
+  var nextTimer = null;
+  var pointerFrame = 0;
+
+  function pickVariant(name) {
+    var options = REACTIONS[name];
+    if (!options || !options.length) return null;
+    if (options.length === 1) return options[0];
+
+    // Draw from everything except the one we used last time for this state.
+    var previous = lastPick[name];
+    var choice;
+    var guard = 0;
+    do {
+      choice = options[(Math.random() * options.length) | 0];
+    } while (choice[0] === previous && guard++ < 8);
+
+    lastPick[name] = choice[0];
+    return choice;
+  }
+
+  function stripAnimation() {
+    if (!root) return;
+    var classes = root.className.split(" ");
+    for (var i = 0; i < classes.length; i++) {
+      if (classes[i].indexOf("k-") === 0 && classes[i] !== "k-asleep") {
+        root.classList.remove(classes[i]);
+      }
+    }
+    running = false;
+  }
+
+  function scheduleNext() {
+    global.clearTimeout(nextTimer);
+    if (!enabled) return;
+
+    var sustained = state === "close" || state === "ready";
+    var min = sustained ? REPEAT_MIN : IDLE_MIN;
+    var max = sustained ? REPEAT_MAX : IDLE_MAX;
+    var wait = min + Math.random() * (max - min);
+
+    nextTimer = global.setTimeout(function () {
+      // Idle fidgets only when there is nothing more interesting going on.
+      play(sustained ? state : "idle");
+    }, wait);
+  }
+
+  /* Run one animation from `name`'s set. Interrupts whatever was playing:
+     a cheer must never be held up by a leftover blink. */
+  function play(name) {
+    if (!enabled || !root || state === "sleep") return;
+
+    var variant = pickVariant(name);
+    if (!variant) return;
+
+    global.clearTimeout(clearTimer);
+    stripAnimation();
+
+    // Force the browser to notice the classes went away, so re-playing the
+    // same animation back to back actually restarts it.
+    void root.offsetWidth;
+
+    var classes = variant[0].split(" ");
+    for (var i = 0; i < classes.length; i++) root.classList.add(classes[i]);
+    running = true;
+
+    clearTimer = global.setTimeout(function () {
+      stripAnimation();
+      scheduleNext();
+    }, variant[1]);
+  }
+
+  /* Pupils drift towards wherever she is working. Cheap, and it does more for
+     "this cat is watching me" than any amount of animation. */
+  function lookAt(x, y) {
+    if (!enabled || !pupils || state === "sleep") return;
+    if (pointerFrame) return;
+
+    pointerFrame = global.requestAnimationFrame(function () {
+      pointerFrame = 0;
+      if (!root) return;
+
+      var box = root.getBoundingClientRect();
+      if (!box.width) return;
+
+      // Eye centre sits around a third of the way down the drawing.
+      var originX = box.left + box.width * 0.5;
+      var originY = box.top + box.height * 0.33;
+      var dx = x - originX;
+      var dy = y - originY;
+      var distance = Math.sqrt(dx * dx + dy * dy) || 1;
+
+      // Clamped hard: a pupil that swings far looks unsettling rather than
+      // attentive.
+      var reach = Math.min(3.2, distance / 90);
+      pupils.style.transform =
+        "translate(" + (dx / distance * reach).toFixed(2) + "px," +
+        (dy / distance * reach * 0.7).toFixed(2) + "px)";
+    });
+  }
+
+  var Kitten = {
+    init: function (element) {
+      root = element;
+      if (!root) return;
+
+      svg = root.querySelector(".kitten-svg");
+      pupils = root.querySelector(".k-pupils");
+
+      global.addEventListener("pointermove", function (event) {
+        lookAt(event.clientX, event.clientY);
+      }, { passive: true });
+
+      scheduleNext();
+    },
+
+    /* The game calls this whenever the situation changes. Repeating the
+       current state is ignored, so placing a fifth letter in an already
+       "watching" word does not restart the animation every time — but a
+       genuine change always gets a fresh, randomly chosen reaction. */
+    setState: function (next) {
+      if (!enabled || !root) return;
+      if (next === state) return;
+
+      var wasAsleep = state === "sleep";
+      state = next;
+
+      if (next === "sleep") {
+        global.clearTimeout(clearTimer);
+        global.clearTimeout(nextTimer);
+        stripAnimation();
+        root.classList.add("k-asleep");
+        return;
+      }
+
+      if (wasAsleep) root.classList.remove("k-asleep");
+
+      if (next === "idle") {
+        scheduleNext();
+        return;
+      }
+      play(next);
+    },
+
+    /* One-off reactions that do not change the ongoing state: she cheers,
+       then goes back to watching an empty line. */
+    react: function (name) {
+      if (!enabled || !root) return;
+      if (state === "sleep") root.classList.remove("k-asleep");
+      state = "idle";
+      play(name);
+    },
+
+    /* Look at a particular element — used when a letter lands. */
+    watch: function (element) {
+      if (!element || !element.getBoundingClientRect) return;
+      var box = element.getBoundingClientRect();
+      lookAt(box.left + box.width / 2, box.top + box.height / 2);
+    },
+
+    setEnabled: function (on) {
+      enabled = !!on;
+      document.body.classList.toggle("no-kitten", !enabled);
+
+      if (!enabled) {
+        global.clearTimeout(clearTimer);
+        global.clearTimeout(nextTimer);
+        stripAnimation();
+      } else {
+        state = "idle";
+        scheduleNext();
+      }
+    },
+
+    reset: function () {
+      if (!root) return;
+      global.clearTimeout(clearTimer);
+      stripAnimation();
+      root.classList.remove("k-asleep");
+      state = "idle";
+      if (pupils) pupils.style.transform = "";
+      scheduleNext();
+    },
+
+    /* Exposed for the tests, which need to know what is available. */
+    variants: function (name) {
+      return (REACTIONS[name] || []).map(function (entry) { return entry[0]; });
+    },
+
+    currentState: function () {
+      return state;
+    }
+  };
+
+  global.Kitten = Kitten;
+})(window);
+</script>
+<script>
+/* ==========================================================================
    grid.js — choosing the sixteen letters.
 
    A random handful of letters makes a miserable game: too few vowels and
@@ -24178,6 +24968,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     speakLetters: true,
     speakDefinitions: true,
     wordGlow: true,
+    kitten: true,
     sound: true,
     calm: false
   };
@@ -24396,6 +25187,18 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     refreshCheckButton();
   }
 
+  /* Letters still sitting in the grid, as a 26 slot count. These are the ones
+     she could actually reach to finish a word off. */
+  function freeLetters() {
+    var letters = "";
+    for (var i = 0; i < state.tiles.length; i++) {
+      if (state.line.indexOf(state.tiles[i].id) === -1) {
+        letters += state.tiles[i].letter;
+      }
+    }
+    return global.Dictionary.countLetters(letters);
+  }
+
   function refreshCheckButton() {
     var word = currentWord();
     var isWord = word.length >= MIN_WORD &&
@@ -24406,6 +25209,27 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     dom.checkBtn.classList.toggle("is-glowing", isWord && settings.wordGlow);
     dom.wordLine.classList.toggle("is-word", isWord && settings.wordGlow);
     dom.soundOutBtn.disabled = word.length === 0;
+
+    updateKitten(word, isWord);
+  }
+
+  /* The kitten's mood follows the word line: nothing, something, nearly, got
+     it. Only the "nearly" case costs a dictionary search, and only when the
+     line is not already a word. */
+  function updateKitten(word, isWord) {
+    if (!state.running) return;
+
+    var mood = "idle";
+    if (isWord) {
+      mood = "ready";
+    } else if (word.length) {
+      // oneAwayFromWord ignores single letters, so the first tile down always
+      // lands on "watching" — she gets a reaction from the very first tap.
+      mood = global.Dictionary.oneAwayFromWord(word, freeLetters())
+        ? "close"
+        : "watching";
+    }
+    global.Kitten.setState(mood);
   }
 
   function removeFromLine(id) {
@@ -24537,6 +25361,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   function rejectWord(word) {
     rejectLine();
     global.Sound.nudge();
+    global.Kitten.react("nudge");
 
     var available = global.Dictionary.countLetters(allLetters());
     var confusion = global.Dictionary.confusionMiss(word, available);
@@ -24642,6 +25467,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     showMessage(praise + " <strong>" + word + "</strong>" + extra, "good");
 
     global.Sound.success(word.length);
+    global.Kitten.react(big ? "bigcheer" : "cheer");
     global.Confetti.burstFrom(dom.wordLine, big ? 1.4 : 1);
     flyWordToList(word);
 
@@ -24781,6 +25607,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     state.secondsLeft = state.minutes * 60;
 
     buildGrid(grid.letters);
+    global.Kitten.reset();
     renderLine();
 
     dom.foundList.innerHTML = "";
@@ -24800,6 +25627,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     state.paused = true;
     stopClock();
     global.Speech.stop();
+    global.Kitten.setState("sleep");
     dom.app.classList.add("is-paused");
     openOverlay(dom.pauseScreen);
   }
@@ -24807,6 +25635,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   function resumeRound() {
     if (!state.running || !state.paused) return;
     state.paused = false;
+    global.Kitten.setState("idle");
     dom.app.classList.remove("is-paused");
     closeOverlay(dom.pauseScreen);
     startClock();
@@ -24863,7 +25692,12 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
     renderMissed();
 
-    if (state.found.length) global.Confetti.celebrate();
+    if (state.found.length) {
+      global.Confetti.celebrate();
+      global.Kitten.react("bigcheer");
+    } else {
+      global.Kitten.setState("sleep");
+    }
     openOverlay(dom.endScreen);
   }
 
@@ -24973,12 +25807,14 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     speakLetters: "setSpeakLetters",
     speakDefinitions: "setSpeakDefinitions",
     wordGlow: "setWordGlow",
+    kitten: "setKitten",
     sound: "setSound",
     calm: "setCalm"
   };
 
   function applySettings() {
     global.Sound.enabled = settings.sound;
+    global.Kitten.setEnabled(settings.kitten);
     global.Confetti.calm = settings.calm;
     document.body.classList.toggle("calm", settings.calm);
     applyLetterHelper();
@@ -24994,6 +25830,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
         applySettings();
         saveStore();
         if (key === "sound" && input.checked) global.Sound.place();
+        if (key === "kitten" && input.checked) global.Kitten.react("cheer");
       });
     });
   }
@@ -25069,6 +25906,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       },
 
       onPick: function (element) {
+        global.Kitten.watch(element);
         global.Sound.pick();
         if (settings.speakLetters) {
           global.Speech.letter(element.getAttribute("data-letter"));
@@ -25244,6 +26082,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     loadStore();
 
     global.Confetti.init(byId("confetti"));
+    global.Kitten.init(byId("kitten"));
     state.foundSet = new Set();
 
     wireSettings();

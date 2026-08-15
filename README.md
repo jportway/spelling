@@ -74,6 +74,38 @@ that exact tile, and asks the question that fixes it:
 of a pair turn up together, so the discrimination gets practised rather than
 avoided. Using one in a word is worth bonus points.
 
+## The kitten
+
+A cat sits on the rim of the word line and watches. It reacts to what she is
+doing, and each reaction has several animations rather than one, because a
+celebration you have seen four times stops being a celebration:
+
+| when | she does | out of |
+| ---- | -------- | ------ |
+| nothing on the line | blinks, ear flicks, tail flicks, head tilts, looks around, yawns | 6 |
+| a letter goes down | perks her ears, leans in, bobs, blinks | 4 |
+| **one letter away from a real word** | wiggles, bounces, taps her paws, eyes go wide, ears twitch | 5 |
+| the line already spells a word | shimmies, hops, cranes her neck | 3 |
+| a word is found | jumps, spins, waves, dances, purrs with her eyes shut | 5 |
+| a long word is found | any of those, plus floating hearts | 4 |
+| not a word yet | tilts her head, blinks, points a paw, peers closer | 4 |
+| paused | curls up and sleeps, with z's | — |
+
+Thirty-one animations in all. One is drawn at random each time and never the
+same one twice running, so she stays surprising for a lot longer than a fixed
+animation would.
+
+The excited "nearly!" reaction is the interesting one: it fires when adding
+one letter she can still reach would finish a real word, which is a genuine
+"you are close" rather than a guess. Her pupils also follow the pointer, which
+does more for *this cat is watching me* than any amount of animation.
+
+She is decoration, so she is hidden from screen readers and everything she
+reacts to is also said in words on the message line. She never overlaps a
+letter at any screen size — she sits in head-room reserved above the word
+line, not on it. Turn her off under **Settings → Kitten friend**; calm mode
+keeps her but takes the bounce out.
+
 ## The rest of the design
 
 Everything here is aimed at a seven year old who finds writing hard and has
@@ -162,6 +194,7 @@ python3 tools/build_dictionary.py
 ```
 index.html              the game
 css/styles.css
+css/kitten.css          the cat's look and all 31 animations
 js/letters.js           the six tricky letters: colours, diagrams, hints
 js/dictionary.js        word lookup, anagram search, near-miss detection
 js/grid.js              picking sixteen playable letters
@@ -169,6 +202,7 @@ js/dragdrop.js          dragging and tapping
 js/speech.js            reading letters, words and meanings aloud
 js/sound.js             synthesised chimes, no audio files
 js/confetti.js          the reward
+js/kitten.js            the cat: reactions and picking between them
 js/game.js              the round
 data/words.js           generated — the word list, loaded first
 data/definitions.js     generated — the meanings, loaded in the background

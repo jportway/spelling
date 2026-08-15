@@ -32,6 +32,7 @@
 
 <link rel="preload" href="data/words.js" as="script">
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/kitten.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
 </head>
 <body>
@@ -70,6 +71,76 @@
   <main class="stage">
 
     <section class="build" aria-label="Word you are building">
+
+      <!-- The kitten sits on the rim of the word line and watches. It is
+           decoration, so it is hidden from screen readers; every reaction it
+           has is also said in words by the message line below. -->
+      <div class="kitten" id="kitten" aria-hidden="true">
+        <svg class="kitten-svg" viewBox="0 0 120 108" focusable="false">
+          <!-- Tail: drawn first so it sits behind the body. A single open
+               sweep on purpose — curl it into a spiral and the dark page
+               shows through the middle, which reads as a hole, not fur. -->
+          <g class="k-tail-group">
+            <path class="k-tail" d="M84 96 q26 0 28 -18 q2 -12 -8 -14"/>
+          </g>
+
+          <!-- body -->
+          <path class="k-body" d="M60 46 q-26 0 -30 28 q-3 22 8 26 h44 q11 -4 8 -26 q-4 -28 -30 -28z"/>
+          <path class="k-belly" d="M60 62 q-14 0 -16 17 q-1 14 5 17 h22 q6 -3 5 -17 q-2 -17 -16 -17z"/>
+          <ellipse class="k-paw k-paw-l" cx="47" cy="96" rx="9" ry="6"/>
+          <ellipse class="k-paw k-paw-r" cx="73" cy="96" rx="9" ry="6"/>
+
+          <!-- head -->
+          <g class="k-head">
+            <path class="k-ear k-ear-l" d="M28 30 l2 -24 l22 13z"/>
+            <path class="k-ear k-ear-r" d="M92 30 l-2 -24 l-22 13z"/>
+            <path class="k-ear-in k-ear-in-l" d="M33 27 l1.5 -14 l13 8z"/>
+            <path class="k-ear-in k-ear-in-r" d="M87 27 l-1.5 -14 l-13 8z"/>
+
+            <ellipse class="k-face" cx="60" cy="34" rx="33" ry="29"/>
+            <path class="k-stripe" d="M50 9 l4 10 M60 6 l0 11 M70 9 l-4 10"/>
+
+            <g class="k-eyes">
+              <ellipse class="k-eye k-eye-l" cx="47" cy="34" rx="8" ry="9"/>
+              <ellipse class="k-eye k-eye-r" cx="73" cy="34" rx="8" ry="9"/>
+              <g class="k-pupils">
+                <circle class="k-pupil" cx="47" cy="35" r="4.2"/>
+                <circle class="k-pupil" cx="73" cy="35" r="4.2"/>
+                <circle class="k-glint" cx="48.8" cy="32.4" r="1.7"/>
+                <circle class="k-glint" cx="74.8" cy="32.4" r="1.7"/>
+              </g>
+              <!-- closed eyes, shown for blinks, sleep and big grins -->
+              <path class="k-lid k-lid-l" d="M40 34 q7 7 14 0"/>
+              <path class="k-lid k-lid-r" d="M66 34 q7 7 14 0"/>
+            </g>
+
+            <ellipse class="k-blush k-blush-l" cx="36" cy="45" rx="7" ry="4.5"/>
+            <ellipse class="k-blush k-blush-r" cx="84" cy="45" rx="7" ry="4.5"/>
+
+            <path class="k-nose" d="M56.5 45 h7 l-3.5 4z"/>
+            <path class="k-mouth" d="M60 49 q-4.5 7 -9 -0.5 M60 49 q4.5 7 9 -0.5"/>
+            <path class="k-mouth-open" d="M52 50 q8 12 16 0 q-8 5 -16 0z"/>
+
+            <path class="k-whiskers"
+                  d="M30 42 h-16 M30 47 h-15 M90 42 h16 M90 47 h15"/>
+          </g>
+
+          <!-- shown only when she finds a word -->
+          <g class="k-hearts">
+            <path class="k-heart k-heart-1" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
+            <path class="k-heart k-heart-2" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
+            <path class="k-heart k-heart-3" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
+          </g>
+
+          <!-- shown only when the game is paused -->
+          <g class="k-zzz">
+            <text class="k-z k-z-1" x="94" y="26">z</text>
+            <text class="k-z k-z-2" x="102" y="16">z</text>
+            <text class="k-z k-z-3" x="110" y="8">z</text>
+          </g>
+        </svg>
+      </div>
+
       <div class="word-line" id="wordLine" role="list" aria-label="Letters in your word">
         <p class="word-line-empty" id="wordLineEmpty">Tap letters to build a word</p>
       </div>
@@ -274,6 +345,16 @@
       </li>
       <li class="setting">
         <label class="switch">
+          <input type="checkbox" id="setKitten" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-text">
+            <strong>Kitten friend</strong>
+            <small>A cat that watches and cheers you on</small>
+          </span>
+        </label>
+      </li>
+      <li class="setting">
+        <label class="switch">
           <input type="checkbox" id="setSound" checked>
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           <span class="switch-text">
@@ -309,6 +390,7 @@
 <script src="js/speech.js"></script>
 <script src="js/sound.js"></script>
 <script src="js/confetti.js"></script>
+<script src="js/kitten.js"></script>
 <script src="js/grid.js"></script>
 <script src="js/dragdrop.js"></script>
 <script src="js/game.js"></script>

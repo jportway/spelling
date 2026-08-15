@@ -181,6 +181,27 @@
       return found;
     },
 
+    /* Would one more letter finish this off?
+
+       Only letters she can actually reach count, so `free` is a 26 slot count
+       of the tiles still sitting in the grid. Cheap enough to run on every
+       change: at most 26 letters by the length of the word, against a Map. */
+    oneAwayFromWord: function (letters, free) {
+      if (!letters || letters.length < 2 || letters.length >= 8) return false;
+
+      for (var slot = 0; slot < 26; slot++) {
+        if (!free[slot]) continue;
+        var letter = String.fromCharCode(A + slot);
+
+        for (var at = 0; at <= letters.length; at++) {
+          if (this.has(letters.slice(0, at) + letter + letters.slice(at))) {
+            return true;
+          }
+        }
+      }
+      return false;
+    },
+
     /* Does swapping one or more of b/d, p/q, n/m turn this into a real word?
        This is the whole point of the game, so it gets its own lookup.
 
