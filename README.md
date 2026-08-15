@@ -14,11 +14,33 @@ from **q**, and **n** from **m**.
 ## Playing it
 
 Open `index.html` in a browser. That is the whole thing — no server, no
-install, no internet connection. It works from a USB stick, and it works on a
-tablet on the sofa.
+install, no internet connection.
 
-To put it online, push this repository and turn on GitHub Pages; it is a
-static site.
+There is also a single-file build, `wordbuilder.html`, with the stylesheet,
+all the code and the whole dictionary folded into one 1.3 MB file. It is the
+easy one to live with: email it to yourself, drop it in iCloud or Dropbox,
+put it on a USB stick, and open it on whatever device Cooper is holding.
+
+```sh
+python3 tools/build_standalone.py     # regenerates wordbuilder.html
+```
+
+### Putting it online
+
+It is a static site, so anything that serves files will do.
+
+- **Netlify Drop** — go to [app.netlify.com/drop](https://app.netlify.com/drop)
+  and drag this folder onto the page. You get a URL in about ten seconds, with
+  no account and no build configuration. Easiest option by a distance.
+- **GitHub Pages** — Settings → Pages → deploy from a branch, root folder.
+  Note that Pages on a *private* repository needs a paid GitHub plan; on a
+  free account the repository has to be public first.
+- **On your own network** — `python3 -m http.server 8000` in this folder, then
+  open `http://<your-computer's-ip>:8000` on the tablet. Good enough for
+  testing on the sofa, and nothing leaves the house.
+
+The dictionary is 1.3 MB but compresses to about 390 KB on the wire, and it is
+fetched once and then cached.
 
 ## How it helps with b, d, p, q, n and m
 
@@ -123,7 +145,9 @@ js/sound.js             synthesised chimes, no audio files
 js/confetti.js          the reward
 js/game.js              the round
 data/dictionary.js      generated — do not edit by hand
+wordbuilder.html        generated — the whole game as one file
 tools/build_dictionary.py
+tools/build_standalone.py
 tools/kid_definitions.txt
 ```
 

@@ -10,8 +10,8 @@
        the caret first.
 
    Pointer events cover mouse, touch and pen with one code path. A dragged
-   tile is reparented to <body> and fixed to the viewport so it can never be
-   clipped by whatever it is flying over.
+   tile is reparented to the document body and fixed to the viewport so it can
+   never be clipped by whatever it is flying over.
 
    The game supplies the callbacks and owns all the state; this file only
    decides where a letter was let go of.
