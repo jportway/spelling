@@ -23,8 +23,14 @@ SOURCE = ROOT / "index.html"
 OUT_PATH = ROOT / "wordbuilder.html"
 
 STYLESHEET = re.compile(r'[ \t]*<link rel="stylesheet" href="([^"]+)">\n?')
-SCRIPT = re.compile(r'[ \t]*<script src="([^"]+)"></script>\n?')
+SCRIPT = re.compile(r'[ \t]*<script src="([^"]+)"[^>]*></script>\n?')
 PRELOAD = re.compile(r'[ \t]*<link rel="preload"[^>]*>\n?')
+
+# index.html fetches the definitions in the background; a single file has
+# nowhere to fetch them from, so they get inlined at this marker instead.
+DEFINITIONS_MARKER = re.compile(
+    r'[ \t]*<!-- definitions-inline-here:.*?-->\n?', re.S)
+DEFINITIONS_ASSET = "data/definitions.js"
 
 
 def read_asset(reference: str) -> str:
@@ -52,11 +58,14 @@ def build() -> None:
     def inline_script(match: re.Match[str]) -> str:
         return "<script>\n" + read_asset(match.group(1)) + "</script>\n"
 
+    html, marker = DEFINITIONS_MARKER.subn(
+        lambda _: "<script>\n" + read_asset(DEFINITIONS_ASSET) + "</script>\n", html)
     html, styles = STYLESHEET.subn(inline_style, html)
     html, scripts = SCRIPT.subn(inline_script, html)
 
-    if not styles or not scripts:
+    if not styles or not scripts or not marker:
         sys.exit("found no assets to inline - has index.html changed?")
+    scripts += marker
 
     OUT_PATH.write_text(html, encoding="utf-8")
     size_mb = OUT_PATH.stat().st_size / (1024 * 1024)

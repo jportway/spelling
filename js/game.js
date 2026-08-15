@@ -9,6 +9,11 @@
 (function (global) {
   "use strict";
 
+  /* Whose game this is. Used everywhere the game speaks to her by name.
+     Changing this covers the generated messages; the headings and the
+     dedication are written into index.html. */
+  var PLAYER = "Cooper";
+
   var GRID_SIZE = 16;
   var MIN_WORD = 3;
   var MAX_WORD = 8; // the longest word in the dictionary
@@ -18,11 +23,18 @@
   var POINTS = [0, 0, 0, 10, 25, 50, 90, 140, 200];
   var TRICKY_BONUS = 5;
 
+  /* Her name lands in roughly a third of these on purpose. Every single time
+     would stop meaning anything. */
   var PRAISE = [
     "Yes!", "Brilliant!", "Nice one!", "Great work!", "You got it!",
-    "Lovely!", "Clever!", "Superb!", "Well spotted!"
+    "Lovely!", "Clever!", "Superb!", "Well spotted!",
+    "Nice one, " + PLAYER + "!", "Go " + PLAYER + "!",
+    "That's it, " + PLAYER + "!", "Clever girl!"
   ];
-  var BIG_PRAISE = ["Wow!", "Amazing!", "Incredible!", "What a word!"];
+  var BIG_PRAISE = [
+    "Wow!", "Amazing!", "Incredible!", "What a word!",
+    "Look at that, " + PLAYER + "!", PLAYER + ", that's enormous!"
+  ];
 
   var STORE_KEY = "wordbuilder.v1";
 
@@ -395,25 +407,44 @@
     var confusion = global.Dictionary.confusionMiss(word, available);
 
     if (confusion) {
-      var at = confusion.swaps[0];
-      var letter = word[at];
-      var colour = global.Letters.colourClass(letter);
-      var info = global.Letters.info(letter);
+      // Usually one letter is to blame, but sometimes two are, and the hint
+      // has to name every tile it is about to wobble.
+      var shown = [];
+      var spoken = [];
+      var humps = false;
+      var balls = false;
 
-      var question = info.humps
-        ? "how many humps should it have?"
-        : "which side should the ball be on?";
+      for (var i = 0; i < confusion.swaps.length; i++) {
+        var letter = word[confusion.swaps[i]];
+        shown.push("<strong class=\"" + global.Letters.colourClass(letter) + "\">" +
+                   letter + "</strong>");
+        spoken.push(global.Letters.spokenName(letter));
+        if (global.Letters.info(letter).humps) humps = true;
+        else balls = true;
+      }
+
+      var question = humps && balls
+        ? "have they got it the right way round?"
+        : (humps ? "how many humps should it have?"
+                 : "which side should the ball be on?");
+
+      var joined = shown.length > 1
+        ? shown.slice(0, -1).join(", ") + " and " + shown[shown.length - 1]
+        : shown[0];
+      var joinedSpoken = spoken.length > 1
+        ? spoken.slice(0, -1).join(", ") + " and " + spoken[spoken.length - 1]
+        : spoken[0];
 
       showMessage(
-        "So close! Look hard at the <strong class=\"" + colour + "\">" + letter +
-        "</strong> &mdash; " + question,
+        "So close, " + PLAYER + "! Look hard at the " + joined +
+        " &mdash; " + question,
         "nudge"
       );
       wobble(confusion.swaps);
 
       global.Speech.say(
-        "Ooh, so close. Look carefully at the " + global.Letters.spokenName(letter) +
-        ". " + question.charAt(0).toUpperCase() + question.slice(1),
+        "Ooh, so close. Look carefully at the " + joinedSpoken + ". " +
+        question.charAt(0).toUpperCase() + question.slice(1),
         { rate: 0.92 }
       );
       return;
@@ -665,17 +696,26 @@
   }
 
   function showResults(quit) {
-    dom.endTitle.textContent = quit ? "Round finished" : "Time's up!";
+    dom.endTitle.textContent = quit
+      ? "Round finished, " + PLAYER
+      : "Time's up, " + PLAYER + "!";
     dom.endScore.textContent = state.score;
     dom.endWords.textContent = state.found.length;
     dom.endLongest.textContent = longestFound() || "–";
     dom.endTricky.textContent = state.trickyUsed;
 
     var note = "";
-    if (state.score >= records.best && state.score > 0) note = "A new best score! 🏆";
-    else if (state.found.length >= 10) note = "Ten words or more. Brilliant work!";
-    else if (state.found.length > 0) note = "Well played!";
-    else note = "Have another go — you'll find one!";
+    if (state.score >= records.best && state.score > 0) {
+      note = "A new best score, " + PLAYER + "! 🏆";
+    } else if (state.found.length >= 10) {
+      note = "Ten words or more. Brilliant work!";
+    } else if (state.trickyUsed >= 4) {
+      note = state.trickyUsed + " tricky letters used. That's the hard bit!";
+    } else if (state.found.length > 0) {
+      note = "Well played, " + PLAYER + "!";
+    } else {
+      note = "Have another go, " + PLAYER + " — you'll find one!";
+    }
     dom.endNote.textContent = note;
 
     renderMissed();
@@ -1030,6 +1070,32 @@
     });
   }
 
+  /* The meanings are seven times the size of the word list, so they are
+     fetched only once she can already play. If they never arrive, words are
+     still found and celebrated - they just are not explained. */
+  function fetchDefinitions() {
+    if (global.SPELLING_DEFINITIONS_RAW) {
+      // The standalone single-file build has them inline already.
+      global.Dictionary.loadDefinitions();
+      return;
+    }
+
+    var script = document.createElement("script");
+    script.src = "data/definitions.js";
+    script.async = true;
+    script.addEventListener("load", function () {
+      global.Dictionary.loadDefinitions();
+    });
+    document.head.appendChild(script);
+  }
+
+  function showBoard() {
+    dom.loadingRow.hidden = true;
+    dom.startBody.hidden = false;
+    dom.app.classList.remove("is-loading");
+    refreshRecords();
+  }
+
   function boot() {
     collectDom();
     loadStore();
@@ -1043,22 +1109,21 @@
     buildHelpCards();
     applySettings();
 
-    // Let the spinner paint before the dictionary parse blocks the thread.
-    global.requestAnimationFrame(function () {
-      global.setTimeout(function () {
-        try {
-          global.Dictionary.load();
-        } catch (err) {
-          dom.loadingRow.textContent = "Could not load the word list. Please reload the page.";
-          return;
-        }
+    // A plain timeout rather than requestAnimationFrame: rAF never fires in a
+    // background tab, which would leave the game stuck on "getting the words
+    // ready" until she came back to it.
+    global.setTimeout(function () {
+      try {
+        global.Dictionary.load();
+      } catch (err) {
+        dom.loadingRow.textContent =
+          "Could not load the word list. Please check your connection and reload.";
+        return;
+      }
 
-        dom.loadingRow.hidden = true;
-        dom.startBody.hidden = false;
-        dom.app.classList.remove("is-loading");
-        refreshRecords();
-      }, 40);
-    });
+      showBoard();
+      fetchDefinitions();
+    }, 30);
   }
 
   if (document.readyState === "loading") {
