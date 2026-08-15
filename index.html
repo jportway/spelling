@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b2340">
+<title>Word Builder</title>
+<link rel="preload" href="data/dictionary.js" as="script">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+</head>
+<body>
+
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<div id="app" class="app is-loading">
+
+  <header class="hud">
+    <div class="hud-left">
+      <div class="timer" id="timer">
+        <svg class="timer-ring" viewBox="0 0 44 44" aria-hidden="true">
+          <circle class="timer-track" cx="22" cy="22" r="19"></circle>
+          <circle class="timer-fill" id="timerFill" cx="22" cy="22" r="19"></circle>
+        </svg>
+        <span class="timer-text" id="timerText">5:00</span>
+      </div>
+      <button class="icon-btn" id="pauseBtn" type="button" title="Pause (space)" aria-label="Pause">
+        <span class="icon-pause" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <div class="hud-score">
+      <span class="score-value" id="scoreValue">0</span>
+      <span class="score-label">points</span>
+    </div>
+
+    <div class="hud-right">
+      <button class="icon-btn" id="helpBtn" type="button" title="Tricky letters" aria-label="Tricky letters guide">?</button>
+      <button class="icon-btn" id="settingsBtn" type="button" title="Settings" aria-label="Settings">
+        <span class="icon-gear" aria-hidden="true">⚙</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="stage">
+
+    <section class="build" aria-label="Word you are building">
+      <div class="word-line" id="wordLine" role="list" aria-label="Letters in your word">
+        <p class="word-line-empty" id="wordLineEmpty">Tap letters to build a word</p>
+      </div>
+
+      <div class="build-actions">
+        <button class="btn btn-quiet" id="clearBtn" type="button">
+          <span aria-hidden="true">↩</span> Clear
+        </button>
+        <button class="btn btn-quiet" id="soundOutBtn" type="button">
+          <span aria-hidden="true">🔊</span> Sound it out
+        </button>
+        <button class="btn btn-go" id="checkBtn" type="button">
+          Check! <span aria-hidden="true">✓</span>
+        </button>
+      </div>
+
+      <p class="message" id="message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="grid-wrap" aria-label="Your letters">
+      <div class="grid" id="grid"></div>
+      <button class="btn btn-quiet btn-shuffle" id="shuffleBtn" type="button">
+        <span aria-hidden="true">🔀</span> Shuffle
+      </button>
+    </section>
+
+    <aside class="found" aria-label="Words you have found">
+      <h2 class="found-title">
+        Words found <span class="found-count" id="foundCount">0</span>
+      </h2>
+      <ul class="found-list" id="foundList"></ul>
+      <p class="found-empty" id="foundEmpty">Your words will appear here ✨</p>
+    </aside>
+
+  </main>
+</div>
+
+<!-- ─────────────────────────────  Start  ───────────────────────────── -->
+<div class="overlay is-open" id="startScreen">
+  <div class="panel panel-start">
+    <h1 class="title">Word&nbsp;Builder</h1>
+    <p class="subtitle">Build as many words as you can!</p>
+
+    <div class="loading" id="loadingRow">
+      <span class="spinner" aria-hidden="true"></span> Getting the words ready…
+    </div>
+
+    <div class="start-body" id="startBody" hidden>
+      <div class="length-choice" role="group" aria-label="How long to play">
+        <span class="length-label">Play for</span>
+        <div class="chips" id="durationChips">
+          <button class="chip" type="button" data-minutes="3">3 min</button>
+          <button class="chip is-on" type="button" data-minutes="5">5 min</button>
+          <button class="chip" type="button" data-minutes="10">10 min</button>
+        </div>
+      </div>
+
+      <button class="btn btn-play" id="playBtn" type="button">Play <span aria-hidden="true">▶</span></button>
+
+      <dl class="records" id="records">
+        <div><dt>Best score</dt><dd id="bestScore">0</dd></div>
+        <div><dt>Words collected</dt><dd id="collectionCount">0</dd></div>
+      </dl>
+
+      <div class="start-links">
+        <button class="link-btn" id="startHelpBtn" type="button">Tricky letters: b d p q n m</button>
+        <button class="link-btn" id="startSettingsBtn" type="button">Settings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────  Paused  ───────────────────────────── -->
+<div class="overlay" id="pauseScreen">
+  <div class="panel">
+    <h2 class="panel-title">Paused</h2>
+    <p class="panel-text">Take all the time you need.</p>
+    <button class="btn btn-play" id="resumeBtn" type="button">Keep playing <span aria-hidden="true">▶</span></button>
+    <button class="link-btn" id="quitBtn" type="button">Finish this round</button>
+  </div>
+</div>
+
+<!-- ─────────────────────────────  Results  ──────────────────────────── -->
+<div class="overlay" id="endScreen">
+  <div class="panel panel-wide">
+    <h2 class="panel-title" id="endTitle">Time's up!</h2>
+
+    <div class="result-stats">
+      <div class="stat"><span class="stat-value" id="endScore">0</span><span class="stat-label">points</span></div>
+      <div class="stat"><span class="stat-value" id="endWords">0</span><span class="stat-label">words</span></div>
+      <div class="stat"><span class="stat-value" id="endLongest">–</span><span class="stat-label">longest</span></div>
+      <div class="stat"><span class="stat-value" id="endTricky">0</span><span class="stat-label">tricky letters</span></div>
+    </div>
+
+    <p class="result-note" id="endNote"></p>
+
+    <div class="missed" id="missedBlock" hidden>
+      <h3 class="missed-title">You could also have made…</h3>
+      <ul class="missed-list" id="missedList"></ul>
+      <p class="missed-hint">Tap a word to hear what it means</p>
+    </div>
+
+    <div class="panel-actions">
+      <button class="btn btn-play" id="againBtn" type="button">Play again <span aria-hidden="true">▶</span></button>
+      <button class="link-btn" id="homeBtn" type="button">Back to the start</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────  Tricky letters  ───────────────────────── -->
+<div class="overlay" id="helpScreen">
+  <div class="panel panel-wide">
+    <h2 class="panel-title">Tricky letters</h2>
+    <p class="panel-text">Two questions tell these letters apart every time.</p>
+
+    <div class="help-rules">
+      <p class="help-rule"><strong>1.</strong> Which side is the <em>ball</em> on?</p>
+      <p class="help-rule"><strong>2.</strong> Does the <em>tail</em> hang below the line?</p>
+    </div>
+
+    <div class="help-cards" id="helpCards"></div>
+
+    <div class="help-bed">
+      <h3 class="missed-title">The bed trick</h3>
+      <p class="panel-text">
+        <strong class="tricky-b">b</strong> and <strong class="tricky-d">d</strong> spell
+        <strong>bed</strong>. The <strong class="tricky-b">b</strong> is the headboard on the
+        left, the <strong class="tricky-d">d</strong> is the foot on the right — so a bed always
+        points its balls inwards, towards the pillow.
+      </p>
+      <div class="bed-figure" aria-hidden="true">
+        <span class="tricky-b">b</span><span class="bed-e">e</span><span class="tricky-d">d</span>
+      </div>
+    </div>
+
+    <div class="panel-actions">
+      <button class="btn btn-play" id="helpCloseBtn" type="button">Got it!</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────  Settings  ─────────────────────────── -->
+<div class="overlay" id="settingsScreen">
+  <div class="panel">
+    <h2 class="panel-title">Settings</h2>
+
+    <ul class="settings-list">
+      <li class="setting">
+        <label class="switch">
+          <input type="checkbox" id="setLetterHelper" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-text">
+            <strong>Letter helper</strong>
+            <small>Show the ball-and-stick shape under b d p q n m</small>
+          </span>
+        </label>
+      </li>
+      <li class="setting">
+        <label class="switch">
+          <input type="checkbox" id="setSpeakLetters" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-text">
+            <strong>Say each letter</strong>
+            <small>Read a letter aloud when it is picked up</small>
+          </span>
+        </label>
+      </li>
+      <li class="setting">
+        <label class="switch">
+          <input type="checkbox" id="setSpeakDefinitions" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-text">
+            <strong>Read out meanings</strong>
+            <small>Say what a word means when it is found</small>
+          </span>
+        </label>
+      </li>
+      <li class="setting">
+        <label class="switch">
+          <input type="checkbox" id="setWordGlow" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-text">
+            <strong>Glow on real words</strong>
+            <small>Light up the Check button when the word is right</small>
+          </span>
+        </label>
+      </li>
+      <li class="setting">
+        <label class="switch">
+          <input type="checkbox" id="setSound" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-text">
+            <strong>Sound effects</strong>
+            <small>Little chimes and clicks</small>
+          </span>
+        </label>
+      </li>
+      <li class="setting">
+        <label class="switch">
+          <input type="checkbox" id="setCalm">
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-text">
+            <strong>Calm mode</strong>
+            <small>Smaller celebrations, gentler movement</small>
+          </span>
+        </label>
+      </li>
+    </ul>
+
+    <div class="panel-actions">
+      <button class="btn btn-play" id="settingsCloseBtn" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
+<script src="data/dictionary.js"></script>
+<script src="js/letters.js"></script>
+<script src="js/dictionary.js"></script>
+<script src="js/speech.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/confetti.js"></script>
+<script src="js/grid.js"></script>
+<script src="js/dragdrop.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
