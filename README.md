@@ -100,11 +100,22 @@ word she has ever found are kept in the browser.
 
 ## Making it hers
 
-The game calls her by name: on the start screen, in about a third of the
-praise messages, in the hints, and on the results screen. If you ever need to
-change that, the name lives in two places — `PLAYER` at the top of
-`js/game.js` for the generated messages, and the headings and dedication in
-`index.html`.
+The game calls her by name: on the start screen, in the hints, on the results
+screen, and in a bit under half the cheers when she finds a word — where it
+mixes in her nicknames too, so she gets "Nice one, Meepsie!" and "You got it,
+Keeps!" as well as her proper name.
+
+Those knobs are at the top of `js/game.js`:
+
+```js
+var PLAYER = "Cooper";
+var NAMES = [PLAYER, PLAYER, PLAYER, "Keeps", "Meepsie"];  // add nicknames here
+var NAME_CHANCE = 0.45;                                    // how often a cheer uses one
+```
+
+Repeating `PLAYER` in `NAMES` is what makes her proper name commoner than the
+nicknames — add or remove entries to change the mix. The headings and the
+dedication are written into `index.html`.
 
 ## The dictionary
 

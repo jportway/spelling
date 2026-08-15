@@ -23,17 +23,22 @@
   var POINTS = [0, 0, 0, 10, 25, 50, 90, 140, 200];
   var TRICKY_BONUS = 5;
 
-  /* Her name lands in roughly a third of these on purpose. Every single time
-     would stop meaning anything. */
+  /* What the game calls her when it cheers. Her proper name comes up most
+     often and the nicknames are the treat. */
+  var NAMES = [PLAYER, PLAYER, PLAYER, "Keeps", "Meepsie"];
+
+  /* Roughly how often a cheer uses one. Every single time would stop landing
+     entirely, and never would waste the best thing about a game being hers. */
+  var NAME_CHANCE = 0.45;
+
   var PRAISE = [
     "Yes!", "Brilliant!", "Nice one!", "Great work!", "You got it!",
-    "Lovely!", "Clever!", "Superb!", "Well spotted!",
-    "Nice one, " + PLAYER + "!", "Go " + PLAYER + "!",
-    "That's it, " + PLAYER + "!", "Clever girl!"
+    "Lovely!", "Clever!", "Superb!", "Well spotted!", "Clever girl!",
+    "Spot on!", "Beautiful!", "That's the one!"
   ];
   var BIG_PRAISE = [
-    "Wow!", "Amazing!", "Incredible!", "What a word!",
-    "Look at that, " + PLAYER + "!", PLAYER + ", that's enormous!"
+    "Wow!", "Amazing!", "Incredible!", "What a word!", "Enormous!",
+    "Look at that!", "That's a huge one!"
   ];
 
   var STORE_KEY = "wordbuilder.v1";
@@ -489,9 +494,17 @@
     addFoundChip(word, points);
   }
 
+  /* "Nice one!" becomes "Nice one, Meepsie!" a bit under half the time. The
+     cheer is both shown and spoken, so she hears her name too. */
+  function cheerFor(word) {
+    var cheer = pick(word.length >= 6 ? BIG_PRAISE : PRAISE);
+    if (Math.random() > NAME_CHANCE) return cheer;
+    return cheer.replace(/[!.]+$/, "") + ", " + pick(NAMES) + "!";
+  }
+
   function celebrate(word, points, tricky, entry) {
     var big = word.length >= 6;
-    var praise = pick(big ? BIG_PRAISE : PRAISE);
+    var praise = cheerFor(word);
 
     var extra = tricky
       ? " <span class=\"pts\">+" + points + "</span> &nbsp;<em>tricky letter bonus!</em>"
