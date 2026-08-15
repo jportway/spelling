@@ -1,4 +1,4 @@
-# Word Builder
+# Cooper's Word Game
 
 A spelling game for Cooper.
 
@@ -17,7 +17,7 @@ Open `index.html` in a browser. That is the whole thing — no server, no
 install, no internet connection.
 
 There is also a single-file build, `wordbuilder.html`, with the stylesheet,
-all the code and the whole dictionary folded into one 1.3 MB file. It is the
+all the code and the whole dictionary folded into one 1.4 MB file. It is the
 easy one to live with: email it to yourself, drop it in iCloud or Dropbox,
 put it on a USB stick, and open it on whatever device Cooper is holding.
 
@@ -39,8 +39,10 @@ It is a static site, so anything that serves files will do.
   open `http://<your-computer's-ip>:8000` on the tablet. Good enough for
   testing on the sofa, and nothing leaves the house.
 
-The dictionary is 1.3 MB but compresses to about 390 KB on the wire, and it is
-fetched once and then cached.
+The word list is 171 KB (67 KB compressed) and the game is playable as soon as
+it lands — under three seconds even on a 1 Mbps connection. The 1.2 MB of
+definitions downloads afterwards, in the background, while she is already
+playing. Both are cached after the first visit.
 
 ## How it helps with b, d, p, q, n and m
 
@@ -96,9 +98,28 @@ calm mode that tones down the celebrations. Calm mode switches itself on if
 the device asks for reduced motion. Best score and the collection of every
 word she has ever found are kept in the browser.
 
+## Making it hers
+
+The game calls her by name: on the start screen, in the hints, on the results
+screen, and in a bit under half the cheers when she finds a word — where it
+mixes in her nicknames too, so she gets "Nice one, Meepsie!" and "You got it,
+Meeps!" as well as her proper name.
+
+Those knobs are at the top of `js/game.js`:
+
+```js
+var PLAYER = "Cooper";
+var NAMES = [PLAYER, "Meeps", "Meepsie"];  // picked at random
+var NAME_CHANCE = 0.45;                    // how often a cheer uses one at all
+```
+
+Each name is equally likely; listing one twice would make it twice as common.
+The headings and the dedication are written into `index.html`.
+
 ## The dictionary
 
-`data/dictionary.js` holds 23,791 words with 21,305 definitions, all offline.
+`data/words.js` and `data/definitions.js` hold 23,761 words with 21,305
+definitions, all offline.
 It is built to be **generous about accepting and careful about suggesting**:
 having a word she genuinely made turned down is the one thing that would put
 her off, so the list is wide, while the words the game offers her at the end
@@ -110,6 +131,11 @@ of a round come from a much smaller everyday tier.
   `colour`, `practise` and `kerb` are all correct.
 - Profanity and adult vocabulary are filtered out — carefully, so that `grape`,
   `canal`, `basement` and `scrape` survive.
+- Obscure words that are a b/d, p/q or n/m reversal of an everyday word are
+  removed, so the game can never mark her reversal correct. `nam` is a real
+  entry in the frequency data, and it is also exactly what you get when you
+  write `man` with the n and m the wrong way round. Real words like `cone`,
+  `mane` and `dab` are reversals too, and those stay.
 - Definitions come from WordNet, cleaned up and cut to one short sentence.
 
 WordNet is written for adults, so the ~250 words a child is most likely to
@@ -144,7 +170,8 @@ js/speech.js            reading letters, words and meanings aloud
 js/sound.js             synthesised chimes, no audio files
 js/confetti.js          the reward
 js/game.js              the round
-data/dictionary.js      generated — do not edit by hand
+data/words.js           generated — the word list, loaded first
+data/definitions.js     generated — the meanings, loaded in the background
 wordbuilder.html        generated — the whole game as one file
 tools/build_dictionary.py
 tools/build_standalone.py

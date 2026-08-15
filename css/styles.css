@@ -64,6 +64,11 @@
 
 * { box-sizing: border-box; }
 
+/* A class like `.loading { display: flex }` outranks the browser's own rule
+   for [hidden], which silently leaves elements on screen after JS hides them.
+   Settle it once, here. */
+[hidden] { display: none !important; }
+
 html, body {
   height: 100%;
   margin: 0;
@@ -907,6 +912,15 @@ button {
   gap: 4px 18px;
   margin-top: 4px;
 }
+
+.dedication {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--ink-faint);
+}
+
+/* Cooper, with the p picked out — the same colour it wears on the tiles. */
+.name-quiet { color: var(--ink-soft); }
 
 /* Results */
 

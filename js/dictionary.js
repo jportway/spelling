@@ -1,13 +1,21 @@
 /* ==========================================================================
    dictionary.js — the offline word list.
 
-   data/dictionary.js hands us one big string, one word per line, in the form
-       word
-       word|pos|baseWord|definition
+   Loaded in two stages, because the two halves have very different sizes and
+   very different urgency:
 
-   The whole thing is about 24,000 words chosen to be words a child would
-   recognise, so a word she has genuinely made is very unlikely to be turned
-   down, and a random mash of letters is very unlikely to be accepted.
+     data/words.js        ~170 KB, three space separated lists, one per
+                          familiarity tier. Needed before she can play.
+     data/definitions.js  ~1.2 MB, one "word|pos|root|meaning" per line.
+                          Only needed the moment a word is found, so it
+                          arrives in the background while she is already
+                          playing. On a slow connection the game starts in a
+                          second and the first meaning may be a beat late,
+                          rather than the whole game waiting on the download.
+
+   About 24,000 words, chosen to be words a child would recognise, so a word
+   she has genuinely made is very unlikely to be turned down and a random mash
+   of letters is very unlikely to be accepted.
    ========================================================================== */
 
 (function (global) {
@@ -15,13 +23,11 @@
 
   var A = 97; // "a"
 
-  var entries = Object.create(null); // word -> raw line
-  var words = [];                    // every word, in dictionary order
-  var masks = null;                  // Int32Array: which letters each word uses
-  var wordSet = null;                // Set of every word, for fast near misses
-  var everydaySet = null;            // words a child certainly knows
-  var familiarSet = null;            // real words, but a step up
-  var loaded = false;
+  var words = [];        // every playable word
+  var masks = null;      // Int32Array: which letters each word uses
+  var tiers = null;      // Uint8Array: 0 everyday, 1 familiar, 2 rarer
+  var index = null;      // Map of word -> position in `words`
+  var meanings = null;   // Map of word -> raw definition line, once loaded
 
   function letterMask(word) {
     var mask = 0;
@@ -41,10 +47,6 @@
     return counts;
   }
 
-  function wordListFrom(raw) {
-    return new Set(typeof raw === "string" && raw.trim() ? raw.trim().split(" ") : []);
-  }
-
   function canForm(word, counts, scratch) {
     scratch.set(counts);
     for (var i = 0; i < word.length; i++) {
@@ -55,57 +57,87 @@
     return true;
   }
 
+  function splitList(raw) {
+    return typeof raw === "string" && raw.trim() ? raw.trim().split(" ") : [];
+  }
+
   var Dictionary = {
-    ready: false,
+    ready: false,          // the word list is in; the game can start
+    hasMeanings: false,    // the definitions have arrived too
     size: 0,
 
     load: function () {
-      if (loaded) return;
+      if (this.ready) return;
 
-      var raw = global.SPELLING_DICTIONARY_RAW;
-      if (typeof raw !== "string") {
-        throw new Error("dictionary data did not load");
+      var byTier = [
+        splitList(global.SPELLING_WORDS_EVERYDAY),
+        splitList(global.SPELLING_WORDS_FAMILIAR),
+        splitList(global.SPELLING_WORDS_REST)
+      ];
+      var total = byTier[0].length + byTier[1].length + byTier[2].length;
+      if (!total) throw new Error("word list did not load");
+
+      words = new Array(total);
+      masks = new Int32Array(total);
+      tiers = new Uint8Array(total);
+      index = new Map();
+
+      var at = 0;
+      for (var tier = 0; tier < 3; tier++) {
+        var list = byTier[tier];
+        for (var i = 0; i < list.length; i++) {
+          var word = list[i];
+          words[at] = word;
+          masks[at] = letterMask(word);
+          tiers[at] = tier;
+          index.set(word, at);
+          at++;
+        }
       }
 
-      var lines = raw.trim().split("\n");
-      words = new Array(lines.length);
-      masks = new Int32Array(lines.length);
+      this.ready = true;
+      this.size = total;
+    },
 
+    /* Called once data/definitions.js has downloaded. Everything works
+       without it; words just get celebrated without an explanation. */
+    loadDefinitions: function () {
+      if (this.hasMeanings) return;
+
+      var raw = global.SPELLING_DEFINITIONS_RAW;
+      if (typeof raw !== "string" || !raw.trim()) return;
+
+      var lines = raw.trim().split("\n");
+      meanings = new Map();
       for (var i = 0; i < lines.length; i++) {
         var line = lines[i];
         var bar = line.indexOf("|");
-        var word = bar === -1 ? line : line.slice(0, bar);
-        words[i] = word;
-        masks[i] = letterMask(word);
-        entries[word] = line;
+        if (bar > 0) meanings.set(line.slice(0, bar), line);
       }
-
-      wordSet = new Set(words);
-      everydaySet = wordListFrom(global.SPELLING_EVERYDAY_RAW);
-      familiarSet = wordListFrom(global.SPELLING_FAMILIAR_RAW);
-
-      loaded = true;
-      this.ready = true;
-      this.size = words.length;
+      this.hasMeanings = true;
     },
 
     has: function (word) {
-      return typeof word === "string" && entries[word] !== undefined;
+      return typeof word === "string" && !!index && index.has(word);
     },
 
     /* 0 = everyday, 1 = familiar, 2 = the long tail. Words are accepted at
        every tier; this only decides what is worth suggesting. */
     familiarity: function (word) {
-      if (everydaySet && everydaySet.has(word)) return 0;
-      if (familiarSet && familiarSet.has(word)) return 1;
-      return 2;
+      var at = index ? index.get(word) : undefined;
+      return at === undefined ? 2 : tiers[at];
     },
 
     /* { word, pos, base, definition } — base is set when the definition came
-       from a root form, so "babies" explains itself via "baby". */
+       from a root form, so "babies" explains itself via "baby". The
+       definition is "" until data/definitions.js has arrived. */
     lookup: function (word) {
-      var line = entries[word];
-      if (line === undefined) return null;
+      if (!this.has(word)) return null;
+
+      var line = meanings ? meanings.get(word) : undefined;
+      if (line === undefined) {
+        return { word: word, pos: "", base: "", definition: "" };
+      }
 
       var parts = line.split("|");
       return {
@@ -161,7 +193,7 @@
 
       for (var i = 0; i < variants.length; i++) {
         var variant = variants[i];
-        if (!entries[variant.word]) continue;
+        if (!this.has(variant.word)) continue;
         if (available && !canForm(variant.word, available, scratch)) continue;
         return variant;
       }
@@ -172,15 +204,15 @@
        Only ever called after a word has already been rejected. */
     nearMiss: function (word, available) {
       var scratch = new Uint8Array(26);
+      var self = this;
       var i, j, candidate;
 
       function usable(text) {
-        if (!wordSet.has(text)) return false;
+        if (!self.has(text)) return false;
         return !available || canForm(text, available, scratch);
       }
 
-      // A letter in the wrong place: "colur" -> "colour" is not this, but
-      // "brwn" -> "brown" is, and swapped neighbours are very common.
+      // Two letters the wrong way round, which is very common.
       for (i = 0; i < word.length - 1; i++) {
         candidate = word.slice(0, i) + word[i + 1] + word[i] + word.slice(i + 2);
         if (candidate !== word && usable(candidate)) {

@@ -17,7 +17,8 @@ Usage
     python3 tools/build_dictionary.py
 
 Output
-    data/dictionary.js
+    data/words.js        the word list, small, loaded first
+    data/definitions.js  the meanings, loaded in the background
 """
 
 from __future__ import annotations
@@ -32,8 +33,14 @@ from pathlib import Path
 from wordfreq import zipf_frequency
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT_PATH = ROOT / "data" / "dictionary.js"
 KID_DEFINITIONS = Path(__file__).resolve().parent / "kid_definitions.txt"
+
+# Two files, because the game only needs the word list to be playable. The
+# words are small and load first; the definitions are eight times bigger and
+# arrive in the background, so a slow connection delays hearing what a word
+# means rather than delaying the start of the game.
+WORDS_PATH = ROOT / "data" / "words.js"
+DEFINITIONS_PATH = ROOT / "data" / "definitions.js"
 
 # Where the npm packages live. Override with DICT_MODULES if you installed them
 # somewhere else.
@@ -530,6 +537,52 @@ def definition_is_clean(definition: str, blocked: set[str]) -> bool:
     return not (tokens & blocked)
 
 
+TRICKY_PARTNER = {"b": "d", "d": "b", "p": "q", "q": "p", "n": "m", "m": "n"}
+
+
+def tricky_variants(word: str) -> set[str]:
+    """Every way of swapping this word's b/d, p/q and n/m for their partners."""
+    positions = [i for i, letter in enumerate(word) if letter in TRICKY_PARTNER]
+    if not positions:
+        return set()
+
+    out = set()
+    for mask in range(1, 1 << len(positions)):
+        letters = list(word)
+        for i, at in enumerate(positions):
+            if mask & (1 << i):
+                letters[at] = TRICKY_PARTNER[word[at]]
+        out.add("".join(letters))
+    out.discard(word)
+    return out
+
+
+def harmful_reversals(
+    selected: set[str], everyday: set[str], defined: set[str], protected: set[str]
+) -> set[str]:
+    """Words that would reward the very mistake the game exists to correct.
+
+    "nam" is in the frequency data because of Vietnam, and it is exactly what
+    you get if you write "man" with the n and m the wrong way round. Accepting
+    it would tell her the reversal was right.
+
+    Only obscure words with no dictionary definition are dropped. "cone",
+    "mane", "sane" and "dab" are all reversals of commoner words too, and they
+    are ordinary English that she must be allowed to build. Anything on the
+    hand-picked keep lists is safe as well: "nana" is a reversal of "mama",
+    and it is also what a lot of children call their grandmother.
+    """
+    doomed = set()
+    for word in selected:
+        if word in everyday or word in defined or word in protected:
+            continue
+        for variant in tricky_variants(word):
+            if variant in everyday:
+                doomed.add(word)
+                break
+    return doomed
+
+
 def resolve_definition(
     word: str, wordnet: WordNet, written: dict[str, str]
 ) -> tuple[str, str, str]:
@@ -620,17 +673,21 @@ def build() -> None:
 
     print(f"  {len(selected)} words kept")
 
-    everyday = []
-    familiar = []
+    # Every word lands in exactly one tier, so the three lists together are the
+    # whole word list and the game can tell familiarity from which list a word
+    # arrived in, with no extra lookup table.
+    everyday: list[str] = []
+    familiar: list[str] = []
+    rest: list[str] = []
     for word in sorted(selected):
-        if len(word) < 3:
-            continue
         zipf = zipf_frequency(word, "en")
-        if zipf >= EVERYDAY_ZIPF:
+        if len(word) >= 3 and zipf >= EVERYDAY_ZIPF:
             everyday.append(word)
-        elif zipf >= FAMILIAR_ZIPF:
+        elif len(word) >= 3 and zipf >= FAMILIAR_ZIPF:
             familiar.append(word)
-    print(f"  {len(everyday)} everyday, {len(familiar)} familiar")
+        else:
+            rest.append(word)
+    print(f"  {len(everyday)} everyday, {len(familiar)} familiar, {len(rest)} rarer")
 
     entries: list[tuple[str, str, str, str]] = []
     with_definition = 0
@@ -649,49 +706,74 @@ def build() -> None:
         print(f"  note: {len(unused)} hand-written words are not in the word "
               f"list and were ignored: {', '.join(unused)}")
 
+    # Drop the handful of obscure words that are a b/d, p/q or n/m reversal of
+    # an everyday one, so the game can never mark her reversal correct.
+    defined = {word for word, _, _, definition in entries if definition}
+    protected = set(ALWAYS_KEEP) | set(BRITISH_WORDS.split()) | set(TWO_LETTER_WORDS) | set(written)
+    doomed = harmful_reversals(selected, set(everyday), defined, protected)
+    if doomed:
+        print(f"  {len(doomed)} reversal traps removed: {', '.join(sorted(doomed))}")
+        selected -= doomed
+        familiar = [w for w in familiar if w not in doomed]
+        rest = [w for w in rest if w not in doomed]
+        entries = [e for e in entries if e[0] not in doomed]
+        with_definition = sum(1 for e in entries if e[3])
+
     coverage = 100 * with_definition / len(entries)
     print(f"  {with_definition} definitions ({coverage:.1f}% coverage)")
 
-    lines = []
-    for word, pos, base, definition in entries:
-        if definition:
-            lines.append(f"{word}|{pos}|{base}|{definition}")
-        else:
-            lines.append(word)
+    # Only words that actually have one go in the definitions file.
+    definition_lines = [
+        f"{word}|{pos}|{base}|{definition}"
+        for word, pos, base, definition in entries
+        if definition
+    ]
 
     by_length: dict[int, int] = {}
     for word, *_ in entries:
         by_length[len(word)] = by_length.get(len(word), 0) + 1
     print("  by length: " + ", ".join(f"{k}:{v}" for k, v in sorted(by_length.items())))
 
-    payload = "\n".join(lines)
-    everyday_payload = " ".join(everyday)
-    familiar_payload = " ".join(familiar)
-    for text in (payload, everyday_payload, familiar_payload):
+    payloads = {
+        "everyday": " ".join(everyday),
+        "familiar": " ".join(familiar),
+        "rest": " ".join(rest),
+        "definitions": "\n".join(definition_lines),
+    }
+    for name, text in payloads.items():
         if "`" in text or "${" in text or "\\" in text:
-            sys.exit("payload contains characters that would break a template literal")
+            sys.exit(f"{name} contains characters that would break a template literal")
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(
+    WORDS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    WORDS_PATH.write_text(
         "/* Generated by tools/build_dictionary.py - do not edit by hand.\n"
-        f" * {len(entries)} words, {with_definition} with definitions.\n"
-        f" * {len(everyday)} everyday and {len(familiar)} familiar words are\n"
-        " * flagged separately, so suggestions can favour words a child knows.\n"
-        " * Each line is either a bare word, or word|pos|baseWord|definition.\n"
-        " * Sources: word-list (npm), wordfreq (pypi), WordNet 3.0 (Princeton).\n"
+        f" * The {len(entries)} playable words, split into three familiarity\n"
+        " * tiers. Every word is in exactly one list. This file is small and\n"
+        " * loads first; definitions.js follows in the background.\n"
+        " * Sources: word-list (npm), wordfreq (pypi).\n"
         " */\n"
-        "window.SPELLING_DICTIONARY_RAW = `\n"
-        f"{payload}\n"
-        "`;\n"
-        "\n"
-        f"window.SPELLING_EVERYDAY_RAW = `{everyday_payload}`;\n"
-        "\n"
-        f"window.SPELLING_FAMILIAR_RAW = `{familiar_payload}`;\n",
+        f"window.SPELLING_WORDS_EVERYDAY = `{payloads['everyday']}`;\n"
+        f"window.SPELLING_WORDS_FAMILIAR = `{payloads['familiar']}`;\n"
+        f"window.SPELLING_WORDS_REST = `{payloads['rest']}`;\n",
         encoding="utf-8",
     )
 
-    size_kb = OUT_PATH.stat().st_size / 1024
-    print(f"wrote {OUT_PATH.relative_to(ROOT)} ({size_kb:.0f} KB)")
+    DEFINITIONS_PATH.write_text(
+        "/* Generated by tools/build_dictionary.py - do not edit by hand.\n"
+        f" * {with_definition} definitions, one per line, as\n"
+        " * word|partOfSpeech|rootWord|definition.\n"
+        " * Loaded in the background: the game is playable without it.\n"
+        " * Sources: WordNet 3.0 (Princeton), tools/kid_definitions.txt.\n"
+        " */\n"
+        "window.SPELLING_DEFINITIONS_RAW = `\n"
+        f"{payloads['definitions']}\n"
+        "`;\n",
+        encoding="utf-8",
+    )
+
+    for path in (WORDS_PATH, DEFINITIONS_PATH):
+        size_kb = path.stat().st_size / 1024
+        print(f"wrote {path.relative_to(ROOT)} ({size_kb:.0f} KB)")
 
 
 if __name__ == "__main__":

@@ -4,8 +4,33 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1b2340">
-<title>Word Builder</title>
-<link rel="preload" href="data/dictionary.js" as="script">
+<title>Cooper's Word Game</title>
+
+<script>
+/* First thing on the page, deliberately: everything below it — the
+   stylesheet, the word list, the game itself — has to download before any of
+   it can say anything. On a slow connection this is the only code running,
+   so it is the only thing that can tell her the difference between "still
+   coming" and "broken". */
+(function () {
+  var timer = setInterval(function () {
+    if (window.SPELLING_WORDS_EVERYDAY) {
+      clearInterval(timer);
+      return;
+    }
+    var text = document.getElementById("loadingText");
+    if (!text) return;               // that part of the page is not parsed yet
+
+    var seconds = Math.round(performance.now() / 1000);
+    if (seconds >= 4) {
+      text.textContent = "Still fetching the words… " + seconds +
+        "s. It is only slow the first time.";
+    }
+  }, 500);
+})();
+</script>
+
+<link rel="preload" href="data/words.js" as="script">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
 </head>
@@ -73,10 +98,10 @@
 
     <aside class="found" aria-label="Words you have found">
       <h2 class="found-title">
-        Words found <span class="found-count" id="foundCount">0</span>
+        Cooper's words <span class="found-count" id="foundCount">0</span>
       </h2>
       <ul class="found-list" id="foundList"></ul>
-      <p class="found-empty" id="foundEmpty">Your words will appear here ✨</p>
+      <p class="found-empty" id="foundEmpty">Your words will appear here, Cooper ✨</p>
     </aside>
 
   </main>
@@ -85,11 +110,12 @@
 <!-- ─────────────────────────────  Start  ───────────────────────────── -->
 <div class="overlay is-open" id="startScreen">
   <div class="panel panel-start">
-    <h1 class="title">Word&nbsp;Builder</h1>
-    <p class="subtitle">Build as many words as you can!</p>
+    <h1 class="title">Cooper's<br>Word&nbsp;Game</h1>
+    <p class="subtitle">How many words can you make, Cooper?</p>
 
     <div class="loading" id="loadingRow">
-      <span class="spinner" aria-hidden="true"></span> Getting the words ready…
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="loadingText">Getting Cooper's words ready…</span>
     </div>
 
     <div class="start-body" id="startBody" hidden>
@@ -105,7 +131,7 @@
       <button class="btn btn-play" id="playBtn" type="button">Play <span aria-hidden="true">▶</span></button>
 
       <dl class="records" id="records">
-        <div><dt>Best score</dt><dd id="bestScore">0</dd></div>
+        <div><dt>Cooper's best</dt><dd id="bestScore">0</dd></div>
         <div><dt>Words collected</dt><dd id="collectionCount">0</dd></div>
       </dl>
 
@@ -113,6 +139,8 @@
         <button class="link-btn" id="startHelpBtn" type="button">Tricky letters: b d p q n m</button>
         <button class="link-btn" id="startSettingsBtn" type="button">Settings</button>
       </div>
+
+      <p class="dedication">Made for Cooper, with love from Dad 💜</p>
     </div>
   </div>
 </div>
@@ -121,7 +149,7 @@
 <div class="overlay" id="pauseScreen">
   <div class="panel">
     <h2 class="panel-title">Paused</h2>
-    <p class="panel-text">Take all the time you need.</p>
+    <p class="panel-text">Take all the time you need, Cooper.</p>
     <button class="btn btn-play" id="resumeBtn" type="button">Keep playing <span aria-hidden="true">▶</span></button>
     <button class="link-btn" id="quitBtn" type="button">Finish this round</button>
   </div>
@@ -158,7 +186,7 @@
 <div class="overlay" id="helpScreen">
   <div class="panel panel-wide">
     <h2 class="panel-title">Tricky letters</h2>
-    <p class="panel-text">Two questions tell these letters apart every time.</p>
+    <p class="panel-text">These six try to trick you, Cooper. Two questions catch them out every time.</p>
 
     <div class="help-rules">
       <p class="help-rule"><strong>1.</strong> Which side is the <em>ball</em> on?</p>
@@ -177,6 +205,18 @@
       </p>
       <div class="bed-figure" aria-hidden="true">
         <span class="tricky-b">b</span><span class="bed-e">e</span><span class="tricky-d">d</span>
+      </div>
+    </div>
+
+    <div class="help-bed">
+      <h3 class="missed-title">You already know one</h3>
+      <p class="panel-text">
+        There is a <strong class="tricky-p">p</strong> in the middle of your own name — and
+        its ball is on the right, with its tail hanging down. Whenever you are stuck on a
+        <strong class="tricky-p">p</strong>, picture your name.
+      </p>
+      <div class="bed-figure" aria-hidden="true">
+        <span class="name-quiet">Coo</span><span class="tricky-p">p</span><span class="name-quiet">er</span>
       </div>
     </div>
 
@@ -260,7 +300,10 @@
   </div>
 </div>
 
-<script src="data/dictionary.js"></script>
+<script src="data/words.js"></script>
+<!-- definitions-inline-here: data/definitions.js is fetched in the background
+     once the game is playable; the standalone build inlines it at this point
+     instead, so a single file needs no network at all. -->
 <script src="js/letters.js"></script>
 <script src="js/dictionary.js"></script>
 <script src="js/speech.js"></script>
