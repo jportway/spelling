@@ -803,13 +803,17 @@
 
      Sampled across lengths and shuffled, because the grid word list is
      alphabetical and a screen full of words starting with "a" looks broken.
-     Everyday words come first and words with a definition next, so this
-     teaches something rather than showing off the dictionary. */
+     Ranked by how hard the word is for a child, so this teaches something
+     rather than showing off the dictionary. */
   function suggestionRank(word) {
     var entry = global.Dictionary.lookup(word);
-    return global.Dictionary.familiarity(word) * 2 +
+    return global.Dictionary.grade(word) * 2 +
            (entry && entry.definition ? 0 : 1);
   }
+
+  /* Words she could not reasonably have been expected to know are no fun to
+     be shown at the end either. Same grading the other game uses. */
+  var MAX_SUGGESTED_GRADE = 3;
 
   function renderMissed() {
     var buckets = { 3: [], 4: [], 5: [] };
@@ -817,6 +821,7 @@
     for (var i = 0; i < state.gridWords.length; i++) {
       var word = state.gridWords[i];
       if (state.foundSet.has(word) || !buckets[word.length]) continue;
+      if (global.Dictionary.grade(word) > MAX_SUGGESTED_GRADE) continue;
       buckets[word.length].push(word);
     }
 

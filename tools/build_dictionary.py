@@ -32,8 +32,15 @@ from pathlib import Path
 
 from wordfreq import zipf_frequency
 
+from grade_words import Grader
+
 ROOT = Path(__file__).resolve().parent.parent
 KID_DEFINITIONS = Path(__file__).resolve().parent / "kid_definitions.txt"
+
+# The hardest grade the missing-letters game will ever put in front of her.
+# Reported at the end of the build so the number is visible; the game itself
+# has the same limit written into js/puzzle.js.
+MAX_PLAYABLE_GRADE = 3
 
 # Two files, because the game only needs the word list to be playable. The
 # words are small and load first; the definitions are eight times bigger and
@@ -105,6 +112,7 @@ EXTRA_BLOCKED = """
     hate hates hated hatred racist racism sexist sexism
     naked nude nudes nudity sexy sex sexual kiss kissed kissing
     hell heck satan devil demon demons
+    pimp pimps whore whores slut sluts porn porno pornography coke
 """
 
 # ... but a handful of those are ordinary childhood vocabulary and blocking
@@ -324,6 +332,16 @@ class WordNet:
         entries = self.senses.get((lemma, pos))
         return -entries[0][0] if entries else 0
 
+    def concreteness(self, lemma: str) -> int | None:
+        """How picturable the commonest sense of this word is: 0 is something
+        you can point at, 3 is an idea. Only nouns carry a ranking, so
+        anything else comes back as None rather than pretending to be
+        concrete."""
+        if self.dominant.get(lemma) != "n":
+            return None
+        entries = self.senses.get((lemma, "n"))
+        return entries[0][1] if entries else None
+
     def define(self, lemma: str, prefer: str = "") -> tuple[str, str] | None:
         """Return (pos, definition), preferring `prefer` when that sense exists."""
         key = (lemma, prefer)
@@ -516,6 +534,12 @@ def british_variants(word: str) -> list[str]:
     match = re.fullmatch(r"(.*[aeiou])l(ed|ing|er|ers|est)", word)
     if match:
         out.append(match.group(1) + "ll" + match.group(2))
+
+    # favorite -> favourite, colorful -> colourful. The suffix rules only look
+    # at the end of the word and miss an "or" with something after it. A wrong
+    # guess costs nothing: the caller only keeps variants that are real words.
+    if "or" in word[:-1]:
+        out.append(word.replace("or", "our", 1))
 
     return out
 
@@ -722,6 +746,91 @@ def build() -> None:
     coverage = 100 * with_definition / len(entries)
     print(f"  {with_definition} definitions ({coverage:.1f}% coverage)")
 
+    # ----------------------------------------------------------------------
+    # Grade every word for how hard it is to spell and how likely she is to
+    # know it. This is what decides the order the missing-letters game works
+    # through them, so that a seven year old meets "cat" long before she
+    # meets "coup" - and never meets "coup" at all.
+    # ----------------------------------------------------------------------
+    grader = Grader()
+    if not grader.cmu:
+        sys.exit("cmudict is missing, and without it words cannot be graded.\n"
+                 "  pip install cmudict")
+
+    defined_words = {word for word, _, _, definition in entries if definition}
+    tier_of = {}
+    for word in everyday:
+        tier_of[word] = 0
+    for word in familiar:
+        tier_of[word] = 1
+    for word in rest:
+        tier_of[word] = 2
+
+    grades: dict[str, int] = {}
+    for word, *_ in entries:
+        grade, _detail = grader.grade(
+            word,
+            zipf_frequency(word, "en"),
+            tier_of.get(word, 2),
+            wordnet.concreteness(word),
+            word in defined_words,
+            wordnet.tag_count(word, wordnet.dominant.get(word, "n")),
+        )
+        grades[word] = grade
+
+    # She is a British child, and the missing-letters game does not merely
+    # accept a spelling - it says the word out loud and asks her to complete
+    # it. Where both spellings survived the cut, the American twin is pushed
+    # out of the game's reach so she is never taught "flavor". Both remain
+    # perfectly acceptable in the word game.
+    held_back = []
+    for word in sorted(grades):
+        if grades[word] > MAX_PLAYABLE_GRADE:
+            continue
+        for british in british_variants(word):
+            # Deliberately not "is the British twin in our list": the source
+            # word list is American, so "favourite" and "colourful" are not in
+            # it at all. Skipping the word entirely is the right trade - the
+            # word game still accepts "favorite", it just is not taught.
+            #
+            # Both tests have to pass, and they catch different mistakes.
+            #
+            # Two spellings of one word are of comparable currency. The
+            # er -> re rule cannot otherwise tell "center/centre" from
+            # "eager", which it reads as an American spelling of the tidal
+            # bore "eagre", or "born" from the archaic "bourn".
+            if zipf_frequency(british, "en") < zipf_frequency(word, "en") - 1.5:
+                continue
+
+            # And two spellings of one word sound the same. Where CMUdict
+            # knows both - it is American, so usually it does not - this
+            # throws out the rule's worst guesses: "filed" is not an American
+            # "filled", and "scoring" is not an American "scouring".
+            here = grader.cmu.get(word)
+            there = grader.cmu.get(british)
+            if here and there and not (
+                {tuple(p) for p in here} & {tuple(p) for p in there}
+            ):
+                continue
+            grades[word] = MAX_PLAYABLE_GRADE + 1
+            held_back.append(word)
+            break
+
+    if held_back:
+        print(f"  {len(held_back)} American spellings held back in favour of "
+              f"their British twins: {', '.join(held_back[:12])}"
+              + (" ..." if len(held_back) > 12 else ""))
+
+    grade_counts: dict[int, int] = {}
+    for grade in grades.values():
+        grade_counts[grade] = grade_counts.get(grade, 0) + 1
+
+    print("  grades (0 is easiest to spell and likeliest to be known): "
+          + ", ".join(f"{k}:{v}" for k, v in sorted(grade_counts.items())))
+    playable = sum(v for k, v in grade_counts.items() if k <= MAX_PLAYABLE_GRADE)
+    print(f"  {playable} words at grade {MAX_PLAYABLE_GRADE} or easier, which is "
+          "what missing-letters draws from")
+
     # Only words that actually have one go in the definitions file.
     definition_lines = [
         f"{word}|{pos}|{base}|{definition}"
@@ -734,10 +843,19 @@ def build() -> None:
         by_length[len(word)] = by_length.get(len(word), 0) + 1
     print("  by length: " + ", ".join(f"{k}:{v}" for k, v in sorted(by_length.items())))
 
+    # One digit per word, in the order the three lists are read back. The
+    # browser rebuilds its own word array in exactly this order, so the two
+    # stay lined up without repeating 23,000 words to carry a number each.
+    ordered = everyday + familiar + rest
+    if len(ordered) != len(entries):
+        sys.exit(f"tier lists hold {len(ordered)} words but there are "
+                 f"{len(entries)} entries - they must line up")
+
     payloads = {
         "everyday": " ".join(everyday),
         "familiar": " ".join(familiar),
         "rest": " ".join(rest),
+        "grades": "".join(str(grades[word]) for word in ordered),
         "definitions": "\n".join(definition_lines),
     }
     for name, text in payloads.items():
@@ -750,11 +868,17 @@ def build() -> None:
         f" * The {len(entries)} playable words, split into three familiarity\n"
         " * tiers. Every word is in exactly one list. This file is small and\n"
         " * loads first; definitions.js follows in the background.\n"
-        " * Sources: word-list (npm), wordfreq (pypi).\n"
+        " *\n"
+        " * GRADES holds one digit per word - 0 is the easiest to spell and\n"
+        " * the likeliest a child already knows, 5 the hardest - in the order\n"
+        " * everyday, familiar, rest. See tools/grade_words.py.\n"
+        " * Sources: word-list (npm), wordfreq (pypi), cmudict (pypi),\n"
+        " * Kuperman et al. age-of-acquisition ratings.\n"
         " */\n"
         f"window.SPELLING_WORDS_EVERYDAY = `{payloads['everyday']}`;\n"
         f"window.SPELLING_WORDS_FAMILIAR = `{payloads['familiar']}`;\n"
-        f"window.SPELLING_WORDS_REST = `{payloads['rest']}`;\n",
+        f"window.SPELLING_WORDS_REST = `{payloads['rest']}`;\n"
+        f"window.SPELLING_WORD_GRADES = `{payloads['grades']}`;\n",
         encoding="utf-8",
     )
 

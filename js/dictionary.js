@@ -26,8 +26,14 @@
   var words = [];        // every playable word
   var masks = null;      // Int32Array: which letters each word uses
   var tiers = null;      // Uint8Array: 0 everyday, 1 familiar, 2 rarer
+  var grades = null;     // Uint8Array: 0 easiest for a child, 5 hardest
   var index = null;      // Map of word -> position in `words`
   var meanings = null;   // Map of word -> raw definition line, once loaded
+
+  /* If the grade data is ever missing or the wrong length, fall back to what
+     the tier implies rather than letting the missing-letters game find no
+     words at all. */
+  var GRADE_FROM_TIER = [1, 2, 4];
 
   function letterMask(word) {
     var mask = 0;
@@ -80,7 +86,15 @@
       words = new Array(total);
       masks = new Int32Array(total);
       tiers = new Uint8Array(total);
+      grades = new Uint8Array(total);
       index = new Map();
+
+      // One digit per word, written in the same order the tiers are read
+      // back, so position is all that ties the two together.
+      var gradeText = global.SPELLING_WORD_GRADES;
+      if (typeof gradeText !== "string" || gradeText.length !== total) {
+        gradeText = null;
+      }
 
       var at = 0;
       for (var tier = 0; tier < 3; tier++) {
@@ -90,6 +104,9 @@
           words[at] = word;
           masks[at] = letterMask(word);
           tiers[at] = tier;
+          grades[at] = gradeText
+            ? gradeText.charCodeAt(at) - 48
+            : GRADE_FROM_TIER[tier];
           index.set(word, at);
           at++;
         }
@@ -126,6 +143,18 @@
     familiarity: function (word) {
       var at = index ? index.get(word) : undefined;
       return at === undefined ? 2 : tiers[at];
+    },
+
+    /* How hard this word is for a child: 0 sounds out cleanly and she almost
+       certainly knows it, 5 is neither. Worked out at build time from a
+       pronunciation dictionary, age-of-acquisition ratings and how often the
+       word turns up in its dictionary sense - see tools/grade_words.py.
+
+       Every word is still accepted whatever its grade. This only decides
+       which ones the game puts in front of her. */
+    grade: function (word) {
+      var at = index ? index.get(word) : undefined;
+      return at === undefined ? 5 : grades[at];
     },
 
     /* { word, pos, base, definition } — base is set when the definition came
@@ -281,7 +310,7 @@
        and that shape is none of this file's business. Handing out the list
        once at startup is cheaper and clearer than guessing at an API. */
     forEach: function (fn) {
-      for (var i = 0; i < words.length; i++) fn(words[i], tiers[i]);
+      for (var i = 0; i < words.length; i++) fn(words[i], tiers[i], grades[i]);
     },
 
     countLetters: countLetters,

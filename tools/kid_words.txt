@@ -1,0 +1,82 @@
+# Words a seven year old knows perfectly well but adult writing hardly uses.
+#
+# Frequency data is built from adult text - news, books, subtitles - so it is
+# a poor guide to what is familiar to a child. "hamster", "wellies" and
+# "playground" are rare in a newspaper and completely ordinary in Year 3.
+# Anything listed here is treated as certainly familiar, whatever the
+# frequency numbers say.
+#
+# This file is meant to be edited. Add the words Cooper actually uses.
+# One word per line or several to a line, whichever is tidier.
+
+# animals
+cat dog puppy kitten rabbit bunny hamster guinea gerbil pony horse donkey
+sheep lamb goat pig piglet cow calf duck duckling chick hen rooster goose
+mouse rat bat fox badger squirrel hedgehog mole otter deer bear wolf
+lion tiger leopard cheetah zebra giraffe hippo rhino elephant monkey
+gorilla panda koala kangaroo camel llama sloth
+whale dolphin shark seal walrus penguin octopus jellyfish crab lobster
+starfish turtle tortoise frog toad newt lizard snake gecko
+bird robin owl eagle parrot peacock swan flamingo ostrich
+bee wasp ant spider beetle ladybird butterfly moth snail slug worm
+dinosaur dragon unicorn mermaid fairy giant troll witch wizard
+
+# food
+apple banana orange grape strawberry raspberry blueberry cherry peach pear
+plum melon lemon lime mango pineapple coconut carrot potato tomato onion
+pea bean corn broccoli cabbage lettuce cucumber pumpkin mushroom
+bread toast butter jam honey cheese egg bacon sausage chicken
+pasta noodle rice pizza burger chips crisps sandwich soup salad
+cake biscuit cookie muffin pancake waffle pudding custard jelly
+sweet chocolate lolly candy popcorn crumpet scone
+milk juice water squash smoothie
+breakfast lunch dinner supper snack picnic
+
+# home and things
+house home garden shed fence gate path door window roof chimney stairs
+bedroom kitchen bathroom cupboard drawer shelf wardrobe
+bed pillow blanket duvet lamp mirror carpet curtain sofa chair table
+plate bowl cup mug spoon fork knife pan kettle fridge oven
+toy teddy doll puzzle jigsaw brick lego marble yoyo kite balloon
+ball bat racket skateboard scooter bike trike swing slide seesaw
+book comic story crayon pencil rubber ruler glue scissors paint brush
+sticker chalk paper card envelope stamp
+
+# school and days
+school class teacher lesson playtime playground assembly homework
+reading writing spelling maths science music art
+friend best buddy team club party birthday holiday weekend
+morning afternoon evening night today tomorrow yesterday
+monday tuesday wednesday thursday friday saturday sunday
+january february march april may june july august september october
+november december
+
+# body and clothes
+head hair face eye ear nose mouth tooth teeth tongue lip chin cheek
+neck shoulder arm elbow hand finger thumb tummy back leg knee foot toe
+shirt jumper hoodie coat jacket dress skirt trousers shorts jeans
+sock shoe boot welly slipper hat cap scarf glove mitten
+pyjamas pocket button zip belt
+
+# outside
+sun moon star sky cloud rain snow ice frost wind storm thunder lightning
+rainbow puddle mud sand shell pebble rock stone hill mountain valley
+river stream lake sea ocean beach wave island forest wood tree leaf
+branch trunk root flower petal grass bush hedge nest
+park farm field pond bridge castle tower lighthouse
+
+# getting about
+car bus lorry truck van train tram plane boat ship ferry rocket
+bike scooter tractor digger ambulance helicopter submarine
+
+# doing things
+run jump skip hop climb swim slide swing dance sing shout laugh giggle
+sleep dream wake wash brush hug cuddle kiss tickle
+draw paint build make bake cook help share play win
+
+# describing
+big small tiny huge giant long short tall wide thin fat
+happy sad cross angry cheeky silly funny kind brave scared shy sleepy
+hot cold warm cool wet dry soft hard smooth bumpy sticky fluffy
+fast slow loud quiet bright dark shiny sparkly
+red orange yellow green blue purple pink brown black white grey gold
