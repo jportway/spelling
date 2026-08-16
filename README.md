@@ -93,6 +93,21 @@ Where the word game waits for a mix-up to happen, this one goes looking:
 Longer words sometimes get two holes, never side by side — adjacent blanks stop
 being two decisions and turn into one guess.
 
+### Easy words first
+
+Every word in the dictionary is graded 0 to 5 for how hard it is — see
+[the dictionary](#the-dictionary) below — and this game works up the scale.
+The first round opens on grade 0 only: **bob, ant, snap, gym, wish, bite,
+bird**. The band widens as she gets them right, and stops at grade 3.
+
+Grades 4 and 5 are never reachable. That is where `coup` lives: four letters,
+two sounds, a silent p, and no way on earth to reason your way to it. So do
+`through`, `ballet`, `debris` and `yacht`.
+
+A British child is also never asked to complete `flavor`. Where both spellings
+survived, the American one is held back — the word game still accepts it, this
+game just will not teach it.
+
 ### When she gets one wrong
 
 Nothing is lost and nothing turns red. The letter falls out, and the game says
@@ -238,6 +253,42 @@ of a round — come from a much smaller everyday tier.
   `mane` and `dab` are reversals too, and those stay.
 - Definitions come from WordNet, cleaned up and cut to one short sentence.
 
+### Grading
+
+Every word carries a grade from **0** (easiest) to **5**, worked out at build
+time by [`tools/grade_words.py`](tools/grade_words.py) and stored as one digit
+per word. It answers two questions.
+
+**Can she work the spelling out?** English usually rewards sounding a word
+out, and where it does not, it is because letters are silent, a grapheme is
+doing something unusual, or an unstressed vowel has collapsed into a schwa
+that could be spelled with any vowel going. Checking the letters against a
+pronunciation dictionary finds all three. `coup` is four letters and two
+sounds — `K UW` — and the p is simply not there, so no amount of listening
+will get her to it. `cat` is three letters and three sounds and scores zero.
+
+**Does she know the word?** Frequency data is counted from adult writing, so
+on its own it believes `coup` is a more familiar word than `hamster`. Three
+things correct it: age-of-acquisition ratings, which say when people report
+learning a word; how often the word appears *in its dictionary sense* in a
+hand-tagged corpus, which is what separates `bed` from `ben` — both look
+common to a frequency counter, because the counter is also counting every Ben
+ever written about; and a hand-written list of ordinary childhood vocabulary.
+
+[`tools/kid_words.txt`](tools/kid_words.txt) is that list, and like
+`kid_definitions.txt` **it is meant to be edited**. Anything on it is treated
+as certainly familiar whatever the numbers say, which is how `hamster`,
+`wellies` and `playground` get to be grade 0.
+
+```
+grade 0   1,548 words   cat bed pig moon hair chin ant snap
+grade 1   2,235         puddle spelling colour word work
+grade 2   3,750         island knee rabbit school yacht
+grade 3   5,932         elephant flavour
+grade 4   7,499         coup through debris — never used by the games
+grade 5   2,811         ballet
+```
+
 WordNet is written for adults, so the ~250 words a child is most likely to
 meet have hand-written definitions instead, in
 [`tools/kid_definitions.txt`](tools/kid_definitions.txt):
@@ -252,7 +303,7 @@ build, and the games will read your wording out instead.
 ### Rebuilding it
 
 ```sh
-pip install wordfreq
+pip install wordfreq cmudict
 npm install --prefix tools word-list wordnet-db naughty-words
 python3 tools/build_dictionary.py
 ```
@@ -276,13 +327,16 @@ js/kitten.js            the cat: reactions and picking between them
 js/game.js              the word game's round
 js/puzzle.js            choosing a word, a hole and a pile of letters
 js/missing.js           the missing-letters round
-data/words.js           generated — the word list, loaded first
+data/words.js           generated — the word list and its grades, loaded first
 data/definitions.js     generated — the meanings, loaded in the background
 wordbuilder.html        generated — the word game as one file
 missingletters.html     generated — missing letters as one file
 tools/build_dictionary.py
 tools/build_standalone.py
+tools/grade_words.py    how hard is this word to spell, and to know?
 tools/kid_definitions.txt
+tools/kid_words.txt     childhood vocabulary the frequency data undervalues
+tools/aoa.txt           age-of-acquisition ratings (Kuperman et al. 2012)
 ```
 
 ## Known rough edges
@@ -296,3 +350,10 @@ tools/kid_definitions.txt
   tail there will be a definition that is technically correct and oddly
   worded. Adding a line to `kid_definitions.txt` fixes any you hit.
 - Words are 3 to 8 letters. Longer ones are not in the dictionary.
+- The grading is a good sorter, not a perfect one. The age-of-acquisition
+  ratings only cover about 2,600 words, so most of the list is graded on
+  frequency, corpus tagging and word shape instead. Expect the odd word in
+  the easy band that is technically simple but not childhood vocabulary. If
+  one turns up that she should not be meeting, adding it to
+  `tools/kid_words.txt` is the wrong fix — that list makes words *easier*.
+  Raise it in `EXTRA_BLOCKED` in `build_dictionary.py` instead.

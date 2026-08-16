@@ -31,17 +31,25 @@
      rather than a schedule to get through.
 
        min, max  how long a word to look for
-       tiers     0 is everyday, 1 is familiar. The long tail is left out: a
-                 word she has never met teaches spelling, not letter shapes.
-       twoGaps   chance of a second hole, on words long enough to spare it */
+       maxGrade  the hardest word allowed in, where grade 0 sounds out
+                 cleanly and she is near certain to know it. Worked out at
+                 build time - see tools/grade_words.py.
+       twoGaps   chance of a second hole, on words long enough to spare it
+
+     She starts on nothing but grade 0 and the band only widens as she gets
+     them right. `coup` is grade 4 and so is never reachable at all: four
+     letters, two sounds, a silent p, and no way to reason it out. */
   var LEVELS = [
-    { min: 3, max: 4, tiers: [0],    twoGaps: 0    },
-    { min: 3, max: 5, tiers: [0],    twoGaps: 0.08 },
-    { min: 4, max: 6, tiers: [0],    twoGaps: 0.18 },
-    { min: 4, max: 6, tiers: [0, 1], twoGaps: 0.28 },
-    { min: 5, max: 7, tiers: [0, 1], twoGaps: 0.38 },
-    { min: 5, max: 8, tiers: [0, 1], twoGaps: 0.5  }
+    { min: 3, max: 4, maxGrade: 0, twoGaps: 0    },
+    { min: 3, max: 5, maxGrade: 0, twoGaps: 0.08 },
+    { min: 4, max: 6, maxGrade: 1, twoGaps: 0.18 },
+    { min: 4, max: 6, maxGrade: 2, twoGaps: 0.28 },
+    { min: 5, max: 7, maxGrade: 2, twoGaps: 0.38 },
+    { min: 5, max: 8, maxGrade: 3, twoGaps: 0.5  }
   ];
+
+  /* Nothing above this ever reaches her, at any level. */
+  var MAX_GRADE = 3;
 
   var MAX_LENGTH = 8;
 
@@ -49,7 +57,7 @@
      decoy is usually a letter she has some reason to consider. */
   var COMMON = "eatoirnslcudhmpgbfywkv";
 
-  var index = null; // index[tier][length] = { all: [...], tricky: [...] }
+  var index = null; // index[grade][length] = { all: [...], tricky: [...] }
 
   function shuffle(list) {
     for (var i = list.length - 1; i > 0; i--) {
@@ -65,16 +73,16 @@
     if (index) return;
 
     index = [];
-    for (var tier = 0; tier < 2; tier++) {
-      index[tier] = [];
+    for (var grade = 0; grade <= MAX_GRADE; grade++) {
+      index[grade] = [];
       for (var len = 0; len <= MAX_LENGTH; len++) {
-        index[tier][len] = { all: [], tricky: [] };
+        index[grade][len] = { all: [], tricky: [] };
       }
     }
 
-    global.Dictionary.forEach(function (word, tier) {
-      if (tier > 1) return;
-      var bucket = index[tier][word.length];
+    global.Dictionary.forEach(function (word, tier, wordGrade) {
+      if (wordGrade > MAX_GRADE) return;
+      var bucket = index[wordGrade][word.length];
       if (!bucket) return;
 
       bucket.all.push(word);
@@ -90,14 +98,20 @@
   function pickWord(level, wantTricky, used) {
     var spec = LEVELS[level] || LEVELS[0];
     var pools = [];
-    var t, len;
+    var grade, len, copies;
 
-    for (t = 0; t < spec.tiers.length; t++) {
+    for (grade = 0; grade <= spec.maxGrade; grade++) {
+      // The easier end of a level's band comes up more often than the hard
+      // end, so widening the band adds harder words without the level
+      // suddenly being made of them.
+      copies = spec.maxGrade - grade + 1;
+
       for (len = spec.min; len <= spec.max; len++) {
-        var bucket = index[spec.tiers[t]][len];
+        var bucket = index[grade][len];
         if (!bucket) continue;
         var list = wantTricky ? bucket.tricky : bucket.all;
-        if (list.length) pools.push(list);
+        if (!list.length) continue;
+        for (var c = 0; c < copies; c++) pools.push(list);
       }
     }
     if (!pools.length) return null;
