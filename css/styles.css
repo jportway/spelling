@@ -920,8 +920,24 @@ button {
   margin-top: 4px;
 }
 
+/* The way across to the other game. Both start screens carry one, so it
+   lives here rather than in either game's own stylesheet. */
+.other-game {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--ink-faint);
+}
+
+.other-game a {
+  color: var(--nudge);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.other-game a:hover { color: var(--ink); }
+
 .dedication {
-  margin: 14px 0 0;
+  margin: 8px 0 0;
   font-size: 14px;
   color: var(--ink-faint);
 }

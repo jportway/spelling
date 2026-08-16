@@ -41,7 +41,11 @@
     "Look at that!", "That's a huge one!"
   ];
 
+  /* The records are this game's own. The settings are shared with the
+     missing-letters game, so turning the sound off in one turns it off in
+     both — she should not have to find the same switch twice. */
   var STORE_KEY = "wordbuilder.v1";
+  var SETTINGS_KEY = "cooper.settings.v1";
 
   var DEFAULT_SETTINGS = {
     letterHelper: true,
@@ -81,11 +85,17 @@
   function loadStore() {
     try {
       var saved = JSON.parse(global.localStorage.getItem(STORE_KEY) || "{}");
-      if (saved.settings) Object.assign(settings, saved.settings);
       if (saved.records) {
         records.best = saved.records.best || 0;
         records.collection = saved.records.collection || [];
       }
+
+      // The settings moved to their own key when the second game arrived.
+      // Falling back to the copy still sitting in the old blob means the
+      // switches she had already set survive the change.
+      var shared = global.localStorage.getItem(SETTINGS_KEY);
+      var chosen = shared ? JSON.parse(shared) : saved.settings;
+      if (chosen) Object.assign(settings, chosen);
     } catch (err) {
       /* A blocked or corrupt localStorage must not stop her playing. */
     }
@@ -97,10 +107,18 @@
 
   function saveStore() {
     try {
-      global.localStorage.setItem(STORE_KEY, JSON.stringify({
-        settings: settings,
-        records: records
-      }));
+      global.localStorage.setItem(STORE_KEY, JSON.stringify({ records: records }));
+
+      // Merge rather than overwrite: the missing-letters game keeps its own
+      // switches in here too, and they are none of this page's business.
+      var shared = {};
+      try {
+        shared = JSON.parse(global.localStorage.getItem(SETTINGS_KEY) || "{}");
+      } catch (err) {
+        shared = {};
+      }
+      global.localStorage.setItem(SETTINGS_KEY,
+        JSON.stringify(Object.assign(shared, settings)));
     } catch (err) {
       /* Not worth interrupting the game over. */
     }

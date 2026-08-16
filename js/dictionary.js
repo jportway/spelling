@@ -274,6 +274,16 @@
       return null;
     },
 
+    /* Walk the whole list, each word with its tier.
+
+       The missing-letters game needs its own index (words bucketed by length
+       and tier, so it can ask for "a short everyday word with a b in it"),
+       and that shape is none of this file's business. Handing out the list
+       once at startup is cheaper and clearer than guessing at an API. */
+    forEach: function (fn) {
+      for (var i = 0; i < words.length; i++) fn(words[i], tiers[i]);
+    },
+
     countLetters: countLetters,
     canForm: canForm
   };

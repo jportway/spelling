@@ -25,6 +25,23 @@
   var config = null;
   var drag = null; // the press in progress, or null
 
+  /* The drop targets currently on offer.
+
+     The word game's targets are the gaps between letters and all of them are
+     always live. The missing-letters game's are the holes punched out of a
+     word, and a hole that has already been filled is not a target any more —
+     hence the selector and the filter. */
+  function gapElements() {
+    var all = config.lineEl.querySelectorAll(config.gapSelector || ".gap");
+    if (!config.gapFilter) return all;
+
+    var live = [];
+    for (var i = 0; i < all.length; i++) {
+      if (config.gapFilter(all[i])) live.push(all[i]);
+    }
+    return live;
+  }
+
   /* Which gap in the word line is nearest the pointer, or null if the pointer
      is nowhere near the line. The catchment is generous on purpose. */
   function insertionIndexAt(x, y) {
@@ -32,8 +49,10 @@
     if (x < box.left - 70 || x > box.right + 70) return null;
     if (y < box.top - 80 || y > box.bottom + 80) return null;
 
-    var gaps = config.lineEl.querySelectorAll(".gap");
-    if (!gaps.length) return 0;
+    var gaps = gapElements();
+    // An empty line still accepts the first letter; a word with every hole
+    // already filled accepts nothing, and says so with a null.
+    if (!gaps.length) return config.gapFilter ? null : 0;
 
     var bestIndex = 0;
     var bestDistance = Infinity;
@@ -55,7 +74,7 @@
   }
 
   function highlightGap(index) {
-    var gaps = config.lineEl.querySelectorAll(".gap");
+    var gaps = gapElements();
     for (var i = 0; i < gaps.length; i++) {
       var gapIndex = parseInt(gaps[i].getAttribute("data-index"), 10);
       gaps[i].classList.toggle("is-active", index !== null && gapIndex === index);
@@ -114,7 +133,12 @@
       startX: event.clientX,
       startY: event.clientY,
       dragging: false,
-      from: tile.parentElement === config.lineEl ? "line" : "grid"
+      // Where the tile started, which decides what letting go of it means.
+      // The word game can tell from the parent; a game whose tiles sit inside
+      // the holes themselves supplies its own answer.
+      from: config.fromFor
+        ? config.fromFor(tile)
+        : (tile.parentElement === config.lineEl ? "line" : "grid")
     };
 
     try {
@@ -171,7 +195,12 @@
 
   var DragDrop = {
     /* options: { lineEl, enabled(), onPick(tile, from), onTap(tile, from),
-                  onDrop(tile, index, from, ghostRect), onGapTap(index) } */
+                  onDrop(tile, index, from, ghostRect), onGapTap(index),
+                  gapSelector, gapFilter(gapEl), fromFor(tile) }
+
+       The last three are optional and only the missing-letters game sets
+       them; left out, this behaves exactly as the word game has always
+       needed it to. */
     init: function (options) {
       config = options;
 
@@ -183,7 +212,7 @@
       // Tapping an empty gap moves the caret without moving any letters.
       config.lineEl.addEventListener("click", function (event) {
         if (!event.target.closest) return;
-        var gap = event.target.closest(".gap");
+        var gap = event.target.closest(config.gapSelector || ".gap");
         if (gap && config.onGapTap) {
           config.onGapTap(parseInt(gap.getAttribute("data-index"), 10) || 0);
         }
