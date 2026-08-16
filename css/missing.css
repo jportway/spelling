@@ -1,0 +1,295 @@
+/* ==========================================================================
+   missing.css — the missing-letters game.
+
+   Everything structural is borrowed from styles.css. What is here is the one
+   thing this game needs and the word game does not: a word written out on a
+   writing line, with a hole punched in it.
+
+   The writing line is not decoration. The whole lesson behind b/d/p/q is
+   "which side is the ball on, and does the tail hang below the line" — so
+   the line has to actually be there, with the letters sitting on it and the
+   tails of p, q, g and y hanging through it.
+   ========================================================================== */
+
+.game-missing {
+  /* One character cell of the word. Small enough that eight of them and the
+     gaps between still fit across a phone held upright. */
+  --word-tile: clamp(34px, 10vmin, 62px);
+  --word-pad: 20px;
+}
+
+/* Six letters have to fit across a phone held upright, or the pile wraps to
+   two rows with one lonely tile on the end. */
+@media (max-width: 500px) {
+  .game-missing { --tile-size: clamp(44px, 13vw, 62px); }
+  .game-missing .pool { gap: 7px; }
+}
+
+/* --------------------------------------------------------------------------
+   The word
+   -------------------------------------------------------------------------- */
+
+.word-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--word-pad) 16px;
+
+  /* How far below the writing line a descender reaches, which is also how far
+     up from the bottom of a cell the line sits. Declared here rather than on
+     the body because fitWord() overrides --word-tile on this element for a
+     long word, and a custom property built from another one is substituted
+     where it is declared — put this on the body and it would keep the old
+     size after a resize. */
+  --word-desc: calc(var(--word-tile) * 0.21);
+}
+
+/* The word shrink-wrapped, so the writing line can be drawn the width of the
+   word rather than the width of the box it sits in. */
+.word-inner {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: clamp(2px, 0.9vmin, 8px);
+  row-gap: calc(var(--word-tile) * 0.5);
+  max-width: 100%;
+}
+
+/* The writing line itself. A little overhang at each end so it reads as a
+   line she is writing on rather than an underline. */
+.word-inner::after {
+  content: "";
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  bottom: var(--word-desc);
+  height: 3px;
+  border-radius: 3px;
+  background: var(--surface-line);
+  pointer-events: none;
+}
+
+/* A wrapped word would leave the line floating under nothing, so on the rare
+   very long word at a very narrow width the line steps aside. */
+.word-row.is-wrapped .word-inner::after { display: none; }
+
+.word-row.is-solved {
+  border-color: var(--go);
+  border-style: solid;
+  background: rgba(52, 211, 153, .1);
+}
+
+.word-row.is-solved .word-inner::after { background: var(--go); opacity: .55; }
+
+/* A hint runs to two lines about half the time. Reserving the space means the
+   pile of letters never jumps down from under her finger just as she reaches
+   for one.
+
+   Height only — no flexbox. A flex container turns the text either side of a
+   <strong> into separate items and eats the spaces between them, which is
+   how "Spot on, Cooper! queen +38" becomes "Spot on, Cooper!queen+38". */
+.game-missing .message { min-height: 2.7em; }
+
+/* One character. Letters and holes are the same box, so they sit on the same
+   line however they are mixed up. */
+.wcell {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex: none;
+  width: var(--word-tile);
+  height: calc(var(--word-tile) * 1.02);
+  font-family: var(--font-letters);
+  font-size: var(--word-tile);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  user-select: none;
+}
+
+/* The six keep their colour here too, so the word she is reading and the
+   tiles she is choosing from speak the same language. */
+.wcell.is-tricky { color: currentColor; }
+
+/* --------------------------------------------------------------------------
+   The hole
+   -------------------------------------------------------------------------- */
+
+.hole {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--word-desc);
+  height: calc(var(--word-tile) * 0.94);
+  border-radius: calc(var(--radius) * .6);
+  border: 3px dashed var(--nudge);
+  background: rgba(165, 180, 252, .1);
+  transition: transform .14s cubic-bezier(.2, 1.4, .4, 1),
+              background .16s ease, border-color .16s ease;
+  animation: hole-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes hole-breathe {
+  50% { background: rgba(165, 180, 252, .2); }
+}
+
+/* Under the pointer mid-drag. */
+.hole.is-active {
+  border-style: solid;
+  border-color: var(--go);
+  background: rgba(52, 211, 153, .2);
+  transform: scale(1.09);
+  animation: none;
+}
+
+/* Chosen by tapping rather than dragging: the next letter she taps lands
+   here. Only ever shown when there is more than one hole to choose between. */
+.hole.is-picked {
+  border-color: var(--gold);
+  border-style: solid;
+  animation: none;
+}
+
+.hole.is-filled {
+  border: 0;
+  background: none;
+  animation: none;
+}
+
+.hole .tile {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Sized to match the letters either side of it: the point of the moment is
+     that the word is now whole, which it does not look if the letter she
+     just found is visibly smaller than its neighbours. */
+  font-size: calc(var(--word-tile) * .82);
+}
+
+.hole .tile.has-helper { font-size: calc(var(--word-tile) * .66); }
+
+/* Locked in. Turning green here is the moment worth having. */
+.hole .tile.is-right {
+  background: #eafaf2;
+  border-bottom-color: var(--go-dark);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, .45), var(--shadow-soft);
+  animation: hole-land .4s cubic-bezier(.2, 1.7, .4, 1);
+}
+
+@keyframes hole-land {
+  0%   { transform: scale(1.35); }
+  60%  { transform: scale(.94); }
+  100% { transform: scale(1); }
+}
+
+/* Wrong one. It tips over and falls out, which is exactly what it looks
+   like it should do — no red, no buzzer, nothing that says "you failed". */
+.tile.is-rejected {
+  animation: hole-reject .44s cubic-bezier(.3, .9, .5, 1) both;
+  z-index: 3;
+
+  /* q's own colour is very nearly the green that means "right" here, so a
+     rejected q would otherwise sit in the hole for half a second wearing a
+     green ring. The letter keeps its colour — that is its identity all
+     through both games — but the ring goes neutral while it falls. */
+  box-shadow: var(--shadow-soft), inset 0 0 0 3px var(--ink-faint);
+}
+
+@keyframes hole-reject {
+  0%   { transform: translateY(0) rotate(0); }
+  25%  { transform: translateY(-8%) rotate(-8deg); }
+  100% { transform: translateY(16%) rotate(10deg); }
+}
+
+/* --------------------------------------------------------------------------
+   The pile of letters
+   -------------------------------------------------------------------------- */
+
+.pool {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(8px, 1.8vmin, 14px);
+}
+
+/* A letter already used stays as an empty dent rather than closing up: the
+   pile keeps its shape, so nothing jumps around under her finger. */
+.pool .slot.is-used {
+  opacity: .35;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .04);
+}
+
+/* Nudged when she has missed twice — the two that matter, side by side. */
+.tile.is-hinted {
+  animation: hint-pulse 1.1s ease-in-out 3;
+  z-index: 2;
+}
+
+@keyframes hint-pulse {
+  50% {
+    transform: translateY(-8px) scale(1.06);
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, .5), var(--shadow-soft);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Start and results
+   -------------------------------------------------------------------------- */
+
+.how-to {
+  max-width: 34ch;
+  margin: 0 auto;
+}
+
+/* The pairs she got wrong, for whoever is sitting next to her. */
+.wobbly-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.wobbly-pair {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--surface-line);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.wobbly-pair:hover { border-color: var(--nudge); }
+
+.wobbly-pair b {
+  font-family: var(--font-letters);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.wobbly-pair .times {
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+/* --------------------------------------------------------------------------
+   Motion
+   -------------------------------------------------------------------------- */
+
+.calm .hole { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hole,
+  .tile.is-hinted,
+  .hole .tile.is-right {
+    animation: none;
+  }
+}

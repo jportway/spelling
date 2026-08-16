@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1b2340">
-<title>Cooper's Word Game</title>
+<title>Cooper's Missing Letters</title>
 
 <script>
 /* First thing on the page, deliberately: everything below it — the
@@ -1609,9 +1609,306 @@ button {
   .kitten { width: clamp(48px, 9vmin, 68px); }
 }
 </style>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+<style>
+/* ==========================================================================
+   missing.css — the missing-letters game.
+
+   Everything structural is borrowed from styles.css. What is here is the one
+   thing this game needs and the word game does not: a word written out on a
+   writing line, with a hole punched in it.
+
+   The writing line is not decoration. The whole lesson behind b/d/p/q is
+   "which side is the ball on, and does the tail hang below the line" — so
+   the line has to actually be there, with the letters sitting on it and the
+   tails of p, q, g and y hanging through it.
+   ========================================================================== */
+
+.game-missing {
+  /* One character cell of the word. Small enough that eight of them and the
+     gaps between still fit across a phone held upright. */
+  --word-tile: clamp(34px, 10vmin, 62px);
+  --word-pad: 20px;
+}
+
+/* Six letters have to fit across a phone held upright, or the pile wraps to
+   two rows with one lonely tile on the end. */
+@media (max-width: 500px) {
+  .game-missing { --tile-size: clamp(44px, 13vw, 62px); }
+  .game-missing .pool { gap: 7px; }
+}
+
+/* --------------------------------------------------------------------------
+   The word
+   -------------------------------------------------------------------------- */
+
+.word-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--word-pad) 16px;
+
+  /* How far below the writing line a descender reaches, which is also how far
+     up from the bottom of a cell the line sits. Declared here rather than on
+     the body because fitWord() overrides --word-tile on this element for a
+     long word, and a custom property built from another one is substituted
+     where it is declared — put this on the body and it would keep the old
+     size after a resize. */
+  --word-desc: calc(var(--word-tile) * 0.21);
+}
+
+/* The word shrink-wrapped, so the writing line can be drawn the width of the
+   word rather than the width of the box it sits in. */
+.word-inner {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: clamp(2px, 0.9vmin, 8px);
+  row-gap: calc(var(--word-tile) * 0.5);
+  max-width: 100%;
+}
+
+/* The writing line itself. A little overhang at each end so it reads as a
+   line she is writing on rather than an underline. */
+.word-inner::after {
+  content: "";
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  bottom: var(--word-desc);
+  height: 3px;
+  border-radius: 3px;
+  background: var(--surface-line);
+  pointer-events: none;
+}
+
+/* A wrapped word would leave the line floating under nothing, so on the rare
+   very long word at a very narrow width the line steps aside. */
+.word-row.is-wrapped .word-inner::after { display: none; }
+
+.word-row.is-solved {
+  border-color: var(--go);
+  border-style: solid;
+  background: rgba(52, 211, 153, .1);
+}
+
+.word-row.is-solved .word-inner::after { background: var(--go); opacity: .55; }
+
+/* A hint runs to two lines about half the time. Reserving the space means the
+   pile of letters never jumps down from under her finger just as she reaches
+   for one.
+
+   Height only — no flexbox. A flex container turns the text either side of a
+   <strong> into separate items and eats the spaces between them, which is
+   how "Spot on, Cooper! queen +38" becomes "Spot on, Cooper!queen+38". */
+.game-missing .message { min-height: 2.7em; }
+
+/* One character. Letters and holes are the same box, so they sit on the same
+   line however they are mixed up. */
+.wcell {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex: none;
+  width: var(--word-tile);
+  height: calc(var(--word-tile) * 1.02);
+  font-family: var(--font-letters);
+  font-size: var(--word-tile);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  user-select: none;
+}
+
+/* The six keep their colour here too, so the word she is reading and the
+   tiles she is choosing from speak the same language. */
+.wcell.is-tricky { color: currentColor; }
+
+/* --------------------------------------------------------------------------
+   The hole
+   -------------------------------------------------------------------------- */
+
+.hole {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--word-desc);
+  height: calc(var(--word-tile) * 0.94);
+  border-radius: calc(var(--radius) * .6);
+  border: 3px dashed var(--nudge);
+  background: rgba(165, 180, 252, .1);
+  transition: transform .14s cubic-bezier(.2, 1.4, .4, 1),
+              background .16s ease, border-color .16s ease;
+  animation: hole-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes hole-breathe {
+  50% { background: rgba(165, 180, 252, .2); }
+}
+
+/* Under the pointer mid-drag. */
+.hole.is-active {
+  border-style: solid;
+  border-color: var(--go);
+  background: rgba(52, 211, 153, .2);
+  transform: scale(1.09);
+  animation: none;
+}
+
+/* Chosen by tapping rather than dragging: the next letter she taps lands
+   here. Only ever shown when there is more than one hole to choose between. */
+.hole.is-picked {
+  border-color: var(--gold);
+  border-style: solid;
+  animation: none;
+}
+
+.hole.is-filled {
+  border: 0;
+  background: none;
+  animation: none;
+}
+
+.hole .tile {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Sized to match the letters either side of it: the point of the moment is
+     that the word is now whole, which it does not look if the letter she
+     just found is visibly smaller than its neighbours. */
+  font-size: calc(var(--word-tile) * .82);
+}
+
+.hole .tile.has-helper { font-size: calc(var(--word-tile) * .66); }
+
+/* Locked in. Turning green here is the moment worth having. */
+.hole .tile.is-right {
+  background: #eafaf2;
+  border-bottom-color: var(--go-dark);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, .45), var(--shadow-soft);
+  animation: hole-land .4s cubic-bezier(.2, 1.7, .4, 1);
+}
+
+@keyframes hole-land {
+  0%   { transform: scale(1.35); }
+  60%  { transform: scale(.94); }
+  100% { transform: scale(1); }
+}
+
+/* Wrong one. It tips over and falls out, which is exactly what it looks
+   like it should do — no red, no buzzer, nothing that says "you failed". */
+.tile.is-rejected {
+  animation: hole-reject .44s cubic-bezier(.3, .9, .5, 1) both;
+  z-index: 3;
+
+  /* q's own colour is very nearly the green that means "right" here, so a
+     rejected q would otherwise sit in the hole for half a second wearing a
+     green ring. The letter keeps its colour — that is its identity all
+     through both games — but the ring goes neutral while it falls. */
+  box-shadow: var(--shadow-soft), inset 0 0 0 3px var(--ink-faint);
+}
+
+@keyframes hole-reject {
+  0%   { transform: translateY(0) rotate(0); }
+  25%  { transform: translateY(-8%) rotate(-8deg); }
+  100% { transform: translateY(16%) rotate(10deg); }
+}
+
+/* --------------------------------------------------------------------------
+   The pile of letters
+   -------------------------------------------------------------------------- */
+
+.pool {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(8px, 1.8vmin, 14px);
+}
+
+/* A letter already used stays as an empty dent rather than closing up: the
+   pile keeps its shape, so nothing jumps around under her finger. */
+.pool .slot.is-used {
+  opacity: .35;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .04);
+}
+
+/* Nudged when she has missed twice — the two that matter, side by side. */
+.tile.is-hinted {
+  animation: hint-pulse 1.1s ease-in-out 3;
+  z-index: 2;
+}
+
+@keyframes hint-pulse {
+  50% {
+    transform: translateY(-8px) scale(1.06);
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, .5), var(--shadow-soft);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Start and results
+   -------------------------------------------------------------------------- */
+
+.how-to {
+  max-width: 34ch;
+  margin: 0 auto;
+}
+
+/* The pairs she got wrong, for whoever is sitting next to her. */
+.wobbly-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.wobbly-pair {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--surface-line);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.wobbly-pair:hover { border-color: var(--nudge); }
+
+.wobbly-pair b {
+  font-family: var(--font-letters);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.wobbly-pair .times {
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+/* --------------------------------------------------------------------------
+   Motion
+   -------------------------------------------------------------------------- */
+
+.calm .hole { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hole,
+  .tile.is-hinted,
+  .hole .tile.is-right {
+    animation: none;
+  }
+}
+</style>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>">
 </head>
-<body>
+<body class="game-missing">
 
 <canvas id="confetti" aria-hidden="true"></canvas>
 
@@ -1646,9 +1943,9 @@ button {
 
   <main class="stage">
 
-    <section class="build" aria-label="Word you are building">
+    <section class="build" aria-label="The word to finish">
 
-      <!-- The kitten sits on the rim of the word line and watches. It is
+      <!-- The kitten sits on the rim of the word and watches. It is
            decoration, so it is hidden from screen readers; every reaction it
            has is also said in words by the message line below. -->
       <div class="kitten" id="kitten" aria-hidden="true">
@@ -1701,7 +1998,7 @@ button {
                   d="M30 42 h-16 M30 47 h-15 M90 42 h16 M90 47 h15"/>
           </g>
 
-          <!-- shown only when she finds a word -->
+          <!-- shown only when she gets one right -->
           <g class="k-hearts">
             <path class="k-heart k-heart-1" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
             <path class="k-heart k-heart-2" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
@@ -1717,38 +2014,35 @@ button {
         </svg>
       </div>
 
-      <div class="word-line" id="wordLine" role="list" aria-label="Letters in your word">
-        <p class="word-line-empty" id="wordLineEmpty">Tap letters to build a word</p>
+      <div class="word-line word-row" id="wordLine" aria-label="The word to finish">
+        <p class="word-line-empty" id="wordLineEmpty">Getting a word…</p>
       </div>
 
       <div class="build-actions">
-        <button class="btn btn-quiet" id="clearBtn" type="button">
-          <span aria-hidden="true">↩</span> Clear
+        <button class="btn btn-quiet" id="sayWordBtn" type="button">
+          <span aria-hidden="true">🔊</span> The word
         </button>
-        <button class="btn btn-quiet" id="soundOutBtn" type="button">
-          <span aria-hidden="true">🔊</span> Sound it out
+        <button class="btn btn-quiet" id="sayMeaningBtn" type="button">
+          <span aria-hidden="true">💬</span> What it means
         </button>
-        <button class="btn btn-go" id="checkBtn" type="button">
-          Check! <span aria-hidden="true">✓</span>
+        <button class="btn btn-quiet" id="skipBtn" type="button">
+          Skip <span aria-hidden="true">⏭</span>
         </button>
       </div>
 
       <p class="message" id="message" role="status" aria-live="polite"></p>
     </section>
 
-    <section class="grid-wrap" aria-label="Your letters">
-      <div class="grid" id="grid"></div>
-      <button class="btn btn-quiet btn-shuffle" id="shuffleBtn" type="button">
-        <span aria-hidden="true">🔀</span> Shuffle
-      </button>
+    <section class="grid-wrap" aria-label="Letters to choose from">
+      <div class="grid pool" id="pool"></div>
     </section>
 
-    <aside class="found" aria-label="Words you have found">
+    <aside class="found" aria-label="Words you have finished">
       <h2 class="found-title">
         Cooper's words <span class="found-count" id="foundCount">0</span>
       </h2>
       <ul class="found-list" id="foundList"></ul>
-      <p class="found-empty" id="foundEmpty">Your words will appear here, Cooper ✨</p>
+      <p class="found-empty" id="foundEmpty">Every word you finish lands here, Cooper ✨</p>
     </aside>
 
   </main>
@@ -1757,8 +2051,8 @@ button {
 <!-- ─────────────────────────────  Start  ───────────────────────────── -->
 <div class="overlay is-open" id="startScreen">
   <div class="panel panel-start">
-    <h1 class="title">Cooper's<br>Word&nbsp;Game</h1>
-    <p class="subtitle">How many words can you make, Cooper?</p>
+    <h1 class="title">Cooper's<br>Missing&nbsp;Letters</h1>
+    <p class="subtitle">Which letter is hiding, Cooper?</p>
 
     <div class="loading" id="loadingRow">
       <span class="spinner" aria-hidden="true"></span>
@@ -1766,6 +2060,12 @@ button {
     </div>
 
     <div class="start-body" id="startBody" hidden>
+      <p class="panel-text how-to">
+        Listen to the word, then drag the letter that belongs in the gap.
+        Watch out — the letter that looks nearly the same is usually sitting
+        right next to it.
+      </p>
+
       <div class="length-choice" role="group" aria-label="How long to play">
         <span class="length-label">Play for</span>
         <div class="chips" id="durationChips">
@@ -1779,7 +2079,7 @@ button {
 
       <dl class="records" id="records">
         <div><dt>Cooper's best</dt><dd id="bestScore">0</dd></div>
-        <div><dt>Words collected</dt><dd id="collectionCount">0</dd></div>
+        <div><dt>Words finished</dt><dd id="collectionCount">0</dd></div>
       </dl>
 
       <div class="start-links">
@@ -1788,7 +2088,7 @@ button {
       </div>
 
       <p class="other-game">
-        Fancy the other one? <a href="missingletters.html">Cooper's Missing Letters →</a>
+        Fancy the other one? <a href="wordbuilder.html">Cooper's Word Game →</a>
       </p>
 
       <p class="dedication">Made for Cooper, with love from Dad 💜</p>
@@ -1814,16 +2114,24 @@ button {
     <div class="result-stats">
       <div class="stat"><span class="stat-value" id="endScore">0</span><span class="stat-label">points</span></div>
       <div class="stat"><span class="stat-value" id="endWords">0</span><span class="stat-label">words</span></div>
-      <div class="stat"><span class="stat-value" id="endLongest">–</span><span class="stat-label">longest</span></div>
+      <div class="stat"><span class="stat-value" id="endFirstTime">0</span><span class="stat-label">first go</span></div>
       <div class="stat"><span class="stat-value" id="endTricky">0</span><span class="stat-label">tricky letters</span></div>
     </div>
 
     <p class="result-note" id="endNote"></p>
 
+    <!-- Only shown when she actually got some wrong. It is the one thing on
+         this screen that is really for whoever is sitting next to her. -->
+    <div class="missed" id="wobblyBlock" hidden>
+      <h3 class="missed-title">Still a bit wobbly</h3>
+      <div class="wobbly-list" id="wobblyList"></div>
+      <p class="missed-hint">Tap a pair to hear how to tell them apart</p>
+    </div>
+
     <div class="missed" id="missedBlock" hidden>
-      <h3 class="missed-title">You could also have made…</h3>
+      <h3 class="missed-title">Words you finished</h3>
       <ul class="missed-list" id="missedList"></ul>
-      <p class="missed-hint">Tap a word to hear what it means</p>
+      <p class="missed-hint">Tap a word to hear it again</p>
     </div>
 
     <div class="panel-actions">
@@ -1885,21 +2193,11 @@ button {
     <ul class="settings-list">
       <li class="setting">
         <label class="switch">
-          <input type="checkbox" id="setLetterHelper" checked>
+          <input type="checkbox" id="setAutoSay" checked>
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           <span class="switch-text">
-            <strong>Letter helper</strong>
-            <small>Show the ball-and-stick shape under b d p q n m</small>
-          </span>
-        </label>
-      </li>
-      <li class="setting">
-        <label class="switch">
-          <input type="checkbox" id="setSpeakLetters" checked>
-          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-          <span class="switch-text">
-            <strong>Say each letter</strong>
-            <small>Read a letter aloud when it is picked up</small>
+            <strong>Say the word</strong>
+            <small>Read each new word out as it appears</small>
           </span>
         </label>
       </li>
@@ -1909,17 +2207,17 @@ button {
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           <span class="switch-text">
             <strong>Read out meanings</strong>
-            <small>Say what a word means when it is found</small>
+            <small>Say what the word means as well as the word</small>
           </span>
         </label>
       </li>
       <li class="setting">
         <label class="switch">
-          <input type="checkbox" id="setWordGlow" checked>
+          <input type="checkbox" id="setLetterHelper" checked>
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           <span class="switch-text">
-            <strong>Glow on real words</strong>
-            <small>Light up the Check button when the word is right</small>
+            <strong>Letter helper</strong>
+            <small>Show the ball-and-stick shape under b d p q n m</small>
           </span>
         </label>
       </li>
@@ -24544,181 +24842,6 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 </script>
 <script>
 /* ==========================================================================
-   grid.js — choosing the sixteen letters.
-
-   A random handful of letters makes a miserable game: too few vowels and
-   nothing can be built. Every grid here is checked against the dictionary
-   before it is shown, and every grid is guaranteed to contain at least two of
-   the six tricky letters, because practising those is the entire point.
-   ========================================================================== */
-
-(function (global) {
-  "use strict";
-
-  var VOWELS = "aeiou";
-
-  var VOWEL_WEIGHTS = { a: 10, e: 13, i: 8, o: 8, u: 4 };
-
-  var CONSONANT_WEIGHTS = {
-    b: 3, c: 5, d: 5, f: 3, g: 3, h: 4, j: 1, k: 2, l: 6, m: 4,
-    n: 7, p: 4, q: 0.3, r: 7, s: 9, t: 9, v: 2, w: 3, x: 0.5,
-    y: 3, z: 0.6
-  };
-
-  // q makes almost nothing without a u, so it is rarely the tricky letter.
-  var TRICKY_WEIGHTS = { b: 4, d: 4, p: 3, n: 4, m: 4, q: 1 };
-
-  function weightedPick(weights, exclude) {
-    var total = 0;
-    var key;
-    for (key in weights) {
-      if (!exclude || !exclude[key]) total += weights[key];
-    }
-    var roll = Math.random() * total;
-    for (key in weights) {
-      if (exclude && exclude[key]) continue;
-      roll -= weights[key];
-      if (roll <= 0) return key;
-    }
-    return key;
-  }
-
-  function shuffle(list) {
-    for (var i = list.length - 1; i > 0; i--) {
-      var j = (Math.random() * (i + 1)) | 0;
-      var swap = list[i];
-      list[i] = list[j];
-      list[j] = swap;
-    }
-    return list;
-  }
-
-  function countOf(letters, letter) {
-    var n = 0;
-    for (var i = 0; i < letters.length; i++) {
-      if (letters[i] === letter) n++;
-    }
-    return n;
-  }
-
-  /* One candidate set of letters, before it has been checked for playability. */
-  function draft(size) {
-    var letters = [];
-    var i;
-
-    // Vowels first. Roughly a third of the grid, which is what makes long
-    // words reachable.
-    var vowelCount = Math.max(4, Math.round(size * 0.34));
-    for (i = 0; i < vowelCount; i++) {
-      var vowel;
-      var guard = 0;
-      do {
-        vowel = weightedPick(VOWEL_WEIGHTS);
-      } while (countOf(letters, vowel) >= 2 && guard++ < 12);
-      letters.push(vowel);
-    }
-
-    // Then the tricky letters. Two thirds of the time both halves of a pair
-    // turn up together, which is exactly the discrimination she needs to
-    // practise, and the colours are there to make it fair.
-    var trickyCount = 2 + (Math.random() < 0.45 ? 1 : 0);
-    var first = weightedPick(TRICKY_WEIGHTS);
-    letters.push(first);
-
-    if (Math.random() < 0.66) {
-      letters.push(global.Letters.partnerOf(first));
-    } else {
-      var used = {};
-      used[first] = true;
-      letters.push(weightedPick(TRICKY_WEIGHTS, used));
-    }
-    for (i = 2; i < trickyCount; i++) {
-      letters.push(weightedPick(TRICKY_WEIGHTS));
-    }
-
-    // Fill up with ordinary consonants.
-    while (letters.length < size) {
-      var consonant;
-      var attempts = 0;
-      do {
-        consonant = weightedPick(CONSONANT_WEIGHTS);
-      } while (countOf(letters, consonant) >= 2 && attempts++ < 12);
-      letters.push(consonant);
-    }
-
-    // A q with no u is a dead tile.
-    if (letters.indexOf("q") !== -1 && letters.indexOf("u") === -1) {
-      for (i = 0; i < letters.length; i++) {
-        if (VOWELS.indexOf(letters[i]) !== -1 && letters[i] !== "u") {
-          letters[i] = "u";
-          break;
-        }
-      }
-    }
-
-    return shuffle(letters.slice(0, size));
-  }
-
-  /* How good is this grid to play? Words are what matter, but a grid where
-     every word is three letters long gets dull fast, and a grid where none of
-     the words use a tricky letter teaches nothing. */
-  function rate(words) {
-    var longer = 0;
-    var tricky = 0;
-
-    for (var i = 0; i < words.length; i++) {
-      var word = words[i];
-      if (word.length >= 4) longer++;
-      for (var j = 0; j < word.length; j++) {
-        if (global.Letters.isTricky(word[j])) { tricky++; break; }
-      }
-    }
-
-    return {
-      total: words.length,
-      longer: longer,
-      tricky: tricky,
-      score: Math.min(words.length, 220) + longer * 2.2 + Math.min(tricky, 90) * 1.6
-    };
-  }
-
-  var Grid = {
-    /* Returns { letters, words } where words is every word the grid can make,
-       longest first. */
-    generate: function (size) {
-      size = size || 16;
-
-      var best = null;
-      var bestScore = -1;
-
-      // Twenty five drafts is plenty to find a good grid and takes a few
-      // milliseconds, because the dictionary scan is mask-filtered.
-      for (var attempt = 0; attempt < 25; attempt++) {
-        var letters = draft(size);
-        var words = global.Dictionary.findFormable(letters.join(""), { min: 3, max: 8 });
-        var rating = rate(words);
-
-        if (rating.score > bestScore) {
-          bestScore = rating.score;
-          best = { letters: letters, words: words, rating: rating };
-        }
-
-        // Good enough to stop looking.
-        if (rating.total >= 70 && rating.longer >= 28 && rating.tricky >= 22) break;
-      }
-
-      return best;
-    },
-
-    /* Same letters, new positions. */
-    shuffle: shuffle
-  };
-
-  global.Grid = Grid;
-})(window);
-</script>
-<script>
-/* ==========================================================================
    dragdrop.js — moving letters with a finger or a mouse.
 
    Two ways in, because dragging is genuinely hard at seven and harder still
@@ -24978,59 +25101,340 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 </script>
 <script>
 /* ==========================================================================
-   game.js — the round itself.
+   puzzle.js — building one missing-letter puzzle.
 
-   Build words from sixteen letters against the clock. Everything that could
-   discourage a child who finds spelling hard has been taken out: no penalty
-   for a wrong guess, no red, no buzzer, and the letters never disappear.
+   A puzzle is a word with holes punched in it and a small pile of letters to
+   fill them from. Two decisions are what make it teach anything:
+
+     Which letter comes out. Most of the time it is one of the six she
+     muddles, because that is the entire point of this game. Not every time,
+     though: if the answer were always a b or a d she could stop reading the
+     word and play the pile instead.
+
+     What sits next to the right answer in the pile. A b with no d beside it
+     is not a decision, so the confusable partner is nearly always dealt in.
+     That is the moment the game exists for — the one where she has to look
+     at the shape and work out which way round it goes.
    ========================================================================== */
 
 (function (global) {
   "use strict";
 
-  /* Whose game this is. Used everywhere the game speaks to her by name.
-     Changing this covers the generated messages; the headings and the
-     dedication are written into index.html. */
+  var TRICKY_RE = /[bdpqnm]/;
+
+  var TRICKY_GAP_CHANCE = 0.78;
+  var PARTNER_CHANCE = 0.9;
+
+  var POOL_MIN = 5;
+  var POOL_MAX = 6;
+
+  /* Levels 0-5. The round controller walks her up after a run of clean
+     answers and back down after a struggle, so this is a ladder to climb
+     rather than a schedule to get through.
+
+       min, max  how long a word to look for
+       tiers     0 is everyday, 1 is familiar. The long tail is left out: a
+                 word she has never met teaches spelling, not letter shapes.
+       twoGaps   chance of a second hole, on words long enough to spare it */
+  var LEVELS = [
+    { min: 3, max: 4, tiers: [0],    twoGaps: 0    },
+    { min: 3, max: 5, tiers: [0],    twoGaps: 0.08 },
+    { min: 4, max: 6, tiers: [0],    twoGaps: 0.18 },
+    { min: 4, max: 6, tiers: [0, 1], twoGaps: 0.28 },
+    { min: 5, max: 7, tiers: [0, 1], twoGaps: 0.38 },
+    { min: 5, max: 8, tiers: [0, 1], twoGaps: 0.5  }
+  ];
+
+  var MAX_LENGTH = 8;
+
+  /* Roughly in order of how often they turn up in a child's writing, so a
+     decoy is usually a letter she has some reason to consider. */
+  var COMMON = "eatoirnslcudhmpgbfywkv";
+
+  var index = null; // index[tier][length] = { all: [...], tricky: [...] }
+
+  function shuffle(list) {
+    for (var i = list.length - 1; i > 0; i--) {
+      var j = (Math.random() * (i + 1)) | 0;
+      var swap = list[i];
+      list[i] = list[j];
+      list[j] = swap;
+    }
+    return list;
+  }
+
+  function build() {
+    if (index) return;
+
+    index = [];
+    for (var tier = 0; tier < 2; tier++) {
+      index[tier] = [];
+      for (var len = 0; len <= MAX_LENGTH; len++) {
+        index[tier][len] = { all: [], tricky: [] };
+      }
+    }
+
+    global.Dictionary.forEach(function (word, tier) {
+      if (tier > 1) return;
+      var bucket = index[tier][word.length];
+      if (!bucket) return;
+
+      bucket.all.push(word);
+      if (TRICKY_RE.test(word)) bucket.tricky.push(word);
+    });
+  }
+
+  /* A word for this level, or null if the level has nothing left to offer.
+
+     Drawn at random and rejected rather than filtered: the alternative is
+     building a fresh array of a few thousand words before every single
+     puzzle, to use exactly one of them. */
+  function pickWord(level, wantTricky, used) {
+    var spec = LEVELS[level] || LEVELS[0];
+    var pools = [];
+    var t, len;
+
+    for (t = 0; t < spec.tiers.length; t++) {
+      for (len = spec.min; len <= spec.max; len++) {
+        var bucket = index[spec.tiers[t]][len];
+        if (!bucket) continue;
+        var list = wantTricky ? bucket.tricky : bucket.all;
+        if (list.length) pools.push(list);
+      }
+    }
+    if (!pools.length) return null;
+
+    var fallback = null;
+
+    for (var tries = 0; tries < 60; tries++) {
+      var pool = pools[(Math.random() * pools.length) | 0];
+      var word = pool[(Math.random() * pool.length) | 0];
+      if (used && used.has(word)) continue;
+
+      // A word whose meaning can be read out is worth a good deal more than
+      // one the game can only say the name of. The definitions download in
+      // the background though, so in the first seconds of the first round
+      // there may not be one yet — take the word anyway rather than stall.
+      var entry = global.Dictionary.lookup(word);
+      if (entry && entry.definition) return { word: word, entry: entry };
+      if (!fallback) fallback = { word: word, entry: entry };
+    }
+
+    return fallback;
+  }
+
+  /* Which positions to punch out.
+
+     `wantTricky` decides which letters are even eligible. If the word turns
+     out to have none of the right kind, any position will do — that is far
+     better than throwing away a word we have already chosen. */
+  function chooseHoles(word, wantTricky, count) {
+    var eligible = [];
+    var everything = [];
+    var i;
+
+    for (i = 0; i < word.length; i++) {
+      everything.push(i);
+      if (global.Letters.isTricky(word[i]) === wantTricky) eligible.push(i);
+    }
+
+    var from = shuffle(eligible.length ? eligible : everything);
+    var holes = [from[0]];
+
+    // Never two holes side by side: adjacent blanks stop being two decisions
+    // and turn into one guess.
+    for (i = 1; i < from.length && holes.length < count; i++) {
+      var clear = true;
+      for (var j = 0; j < holes.length; j++) {
+        if (Math.abs(from[i] - holes[j]) <= 1) clear = false;
+      }
+      if (clear) holes.push(from[i]);
+    }
+
+    holes.sort(function (a, b) { return a - b; });
+    return holes;
+  }
+
+  /* Decoys worth offering, most tempting first.
+
+     A letter from elsewhere in the word comes first — it is right there in
+     front of her, so reaching for it is the natural mistake. Then one more
+     of the six, because rejecting a p on a hole that wants a t is still
+     shape practice. Ordinary letters fill whatever is left: a pile made
+     entirely of b, d, p and q stops being a word game and becomes an eye
+     test. */
+  function decoyOrder(word, taken) {
+    var seen = {};
+    var fromWord = [];
+    var tricky = [];
+    var ordinary = [];
+    var six = global.Letters.all();
+    var i;
+
+    for (i = 0; i < taken.length; i++) seen[taken[i]] = true;
+
+    for (i = 0; i < word.length; i++) {
+      if (seen[word[i]]) continue;
+      seen[word[i]] = true;
+      fromWord.push(word[i]);
+    }
+    for (i = 0; i < six.length; i++) {
+      if (seen[six[i]]) continue;
+      seen[six[i]] = true;
+      tricky.push(six[i]);
+    }
+    for (i = 0; i < COMMON.length; i++) {
+      if (seen[COMMON[i]]) continue;
+      seen[COMMON[i]] = true;
+      ordinary.push(COMMON[i]);
+    }
+
+    shuffle(fromWord);
+    shuffle(tricky);
+    shuffle(ordinary);
+
+    var out = [];
+    if (fromWord.length) out.push(fromWord.shift());
+    if (tricky.length) out.push(tricky.shift());
+    return out.concat(fromWord, ordinary, tricky);
+  }
+
+  function buildPool(word, holes) {
+    var pool = [];
+    var i;
+
+    // The answers, duplicates and all: "bib" with both b's out needs two b's
+    // in the pile or it cannot be finished.
+    for (i = 0; i < holes.length; i++) pool.push(word[holes[i]]);
+
+    // Then the letter she is most likely to reach for by mistake. Already
+    // being in the pile counts — if the word needs both a b and a d, the
+    // decision is on the board without any help from us.
+    for (i = 0; i < holes.length; i++) {
+      var partner = global.Letters.partnerOf(word[holes[i]]);
+      if (!partner || pool.indexOf(partner) !== -1) continue;
+      if (Math.random() < PARTNER_CHANCE) pool.push(partner);
+    }
+
+    var target = POOL_MIN + ((Math.random() * (POOL_MAX - POOL_MIN + 1)) | 0);
+    if (target < pool.length + 1) target = pool.length + 1;
+
+    var decoys = decoyOrder(word, pool);
+    for (i = 0; i < decoys.length && pool.length < target; i++) {
+      pool.push(decoys[i]);
+    }
+
+    return shuffle(pool);
+  }
+
+  var Puzzle = {
+    levelCount: LEVELS.length,
+
+    /* Index the word list by tier and length. Cheap — one pass over about
+       24,000 words — and it happens once, before the clock starts. */
+    prepare: build,
+
+    /* { word, entry, holes: [index...], pool: [letter...] } or null.
+
+       `used` is the set of words already seen this round, so she is not
+       asked to spell the same one twice. */
+    make: function (level, used) {
+      build();
+
+      var spec = LEVELS[level] || LEVELS[0];
+      var wantTricky = Math.random() < TRICKY_GAP_CHANCE;
+
+      var chosen = pickWord(level, wantTricky, used);
+      // Running out of one kind of word is no reason to stop the round: take
+      // the other kind, and failing that anything at all.
+      if (!chosen) {
+        wantTricky = !wantTricky;
+        chosen = pickWord(level, wantTricky, used);
+      }
+      if (!chosen) chosen = pickWord(0, true, null);
+      if (!chosen) return null;
+
+      var word = chosen.word;
+      var count = (word.length >= 5 && Math.random() < spec.twoGaps) ? 2 : 1;
+      var holes = chooseHoles(word, wantTricky, count);
+
+      return {
+        word: word,
+        entry: chosen.entry,
+        holes: holes,
+        pool: buildPool(word, holes)
+      };
+    },
+
+    /* Exposed for the tests, which check the ladder is actually a ladder. */
+    levels: function () {
+      return LEVELS;
+    }
+  };
+
+  global.Puzzle = Puzzle;
+})(window);
+</script>
+<script>
+/* ==========================================================================
+   missing.js — the round, for the missing-letters game.
+
+   A word appears with a hole in it and gets read out, meaning and all. She
+   drags the letter that belongs in the hole. The right one locks in and goes
+   green; the wrong one tips over and falls back into the pile.
+
+   Most of the time the hole wants one of b, d, p, q, n or m, and most of the
+   time the letter it is muddled with is sitting right there in the pile — so
+   the game keeps asking the one question that is actually hard, over and
+   over, in a form where getting it wrong costs nothing.
+   ========================================================================== */
+
+(function (global) {
+  "use strict";
+
   var PLAYER = "Cooper";
-
-  var GRID_SIZE = 16;
-  var MIN_WORD = 3;
-  var MAX_WORD = 8; // the longest word in the dictionary
-
-  /* Points by word length. The jump from five letters to six is deliberate:
-     it is worth the effort of hunting for a long one. */
-  var POINTS = [0, 0, 0, 10, 25, 50, 90, 140, 200];
-  var TRICKY_BONUS = 5;
-
-  /* What the game calls her when it cheers, picked at random. Listing a name
-     more than once would make it come up more often. */
   var NAMES = [PLAYER, "Meeps", "Meepsie"];
-
-  /* Roughly how often a cheer uses one. Every single time would stop landing
-     entirely, and never would waste the best thing about a game being hers. */
   var NAME_CHANCE = 0.45;
+
+  /* Points by word length, plus what she earns for the hard parts. Getting
+     it first go is worth as much as two extra letters: this game is about
+     stopping to look, not about speed. */
+  var POINTS = [0, 0, 0, 10, 14, 20, 28, 38, 50];
+  var TRICKY_BONUS = 8;
+  var CLEAN_BONUS = 10;
+
+  /* How long the finished word stays up before the next one, in
+     milliseconds. Long enough to enjoy, short enough not to lose her. */
+  var ADVANCE_MS = 1750;
+  var ADVANCE_BIG_MS = 2200;
+
+  /* How long the wrong letter sits in the hole before it falls out. Dragging
+     is off for exactly this long, so a tile cannot be grabbed halfway
+     through being put back. */
+  var SETTLE_MS = 440;
+
+  /* How far the writing line pokes out past each end of the word. Matches
+     the offset in missing.css, and has to be allowed for when working out
+     whether the word fits. */
+  var RULE_OVERHANG = 10;
 
   var PRAISE = [
     "Yes!", "Brilliant!", "Nice one!", "Great work!", "You got it!",
-    "Lovely!", "Clever!", "Superb!", "Well spotted!", "Clever girl!",
-    "Spot on!", "Beautiful!", "That's the one!"
+    "Lovely!", "Clever!", "Spot on!", "Well looked!", "That's the one!",
+    "Perfect!", "Clever girl!"
   ];
   var BIG_PRAISE = [
-    "Wow!", "Amazing!", "Incredible!", "What a word!", "Enormous!",
-    "Look at that!", "That's a huge one!"
+    "Wow!", "Amazing!", "Incredible!", "Look at that!", "Brilliant work!",
+    "What a word!"
   ];
 
-  /* The records are this game's own. The settings are shared with the
-     missing-letters game, so turning the sound off in one turns it off in
-     both — she should not have to find the same switch twice. */
-  var STORE_KEY = "wordbuilder.v1";
+  var STORE_KEY = "missingletters.v1";
   var SETTINGS_KEY = "cooper.settings.v1";
 
   var DEFAULT_SETTINGS = {
-    letterHelper: true,
-    speakLetters: true,
+    autoSay: true,
     speakDefinitions: true,
-    wordGlow: true,
+    letterHelper: true,
     kitten: true,
     sound: true,
     calm: false
@@ -25046,15 +25450,26 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     minutes: 5,
     secondsLeft: 0,
     score: 0,
-    tiles: [],
-    line: [],
-    caret: 0,
-    found: [],
-    foundSet: null,
-    gridWords: [],
-    trickyUsed: 0,
+
+    level: 0,        // 0-5, see puzzle.js
+    cleanRun: 0,     // consecutive first-go answers, for the ladder
+
+    puzzle: null,
+    holes: [],       // [{ at, letter, el, filled }]
+    pool: [],        // [{ id, letter, el, slotEl, used }]
+    picked: 0,       // which hole a tapped letter goes into
+    misses: 0,       // wrong letters tried on this word
+
+    solved: [],
+    used: null,      // words already asked this round
+    firstTime: 0,
+    trickyFixed: 0,
+    wobbly: null,    // "bd" -> how many times that pair went wrong
+
     ticker: null,
-    praiseAt: 0
+    advance: null,
+    settleTimer: null,
+    settling: false
   };
 
   // ------------------------------------------------------------------------
@@ -25068,17 +25483,13 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
         records.best = saved.records.best || 0;
         records.collection = saved.records.collection || [];
       }
-
-      // The settings moved to their own key when the second game arrived.
-      // Falling back to the copy still sitting in the old blob means the
-      // switches she had already set survive the change.
+      // Settings are shared with the word game, so the sound switch is the
+      // same switch on both pages.
       var shared = global.localStorage.getItem(SETTINGS_KEY);
-      var chosen = shared ? JSON.parse(shared) : saved.settings;
-      if (chosen) Object.assign(settings, chosen);
+      if (shared) Object.assign(settings, JSON.parse(shared));
     } catch (err) {
       /* A blocked or corrupt localStorage must not stop her playing. */
     }
-    // Someone who has asked the whole system to calm down gets calm mode.
     if (global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       settings.calm = true;
     }
@@ -25088,8 +25499,8 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     try {
       global.localStorage.setItem(STORE_KEY, JSON.stringify({ records: records }));
 
-      // Merge rather than overwrite: the missing-letters game keeps its own
-      // switches in here too, and they are none of this page's business.
+      // Merge rather than overwrite: the word game keeps its own switches in
+      // here too, and they are none of this page's business.
       var shared = {};
       try {
         shared = JSON.parse(global.localStorage.getItem(SETTINGS_KEY) || "{}");
@@ -25111,47 +25522,29 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     return document.getElementById(id);
   }
 
-  function tileById(id) {
-    for (var i = 0; i < state.tiles.length; i++) {
-      if (state.tiles[i].id === id) return state.tiles[i];
-    }
-    return null;
+  function pick(list) {
+    return list[(Math.random() * list.length) | 0];
   }
 
-  function currentWord() {
-    var word = "";
-    for (var i = 0; i < state.line.length; i++) {
-      word += tileById(state.line[i]).letter;
-    }
-    return word;
-  }
-
-  function allLetters() {
-    var letters = "";
-    for (var i = 0; i < state.tiles.length; i++) {
-      letters += state.tiles[i].letter;
-    }
-    return letters;
-  }
-
-  function trickyCount(word) {
-    var n = 0;
-    for (var i = 0; i < word.length; i++) {
-      if (global.Letters.isTricky(word[i])) n++;
-    }
-    return n;
+  function cap(text) {
+    return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
   function overlayOpen() {
     return !!document.querySelector(".overlay.is-open");
   }
 
-  function pick(list) {
-    return list[(Math.random() * list.length) | 0];
+  function coloured(letter) {
+    var cls = global.Letters.colourClass(letter);
+    return "<strong" + (cls ? " class=\"" + cls + "\"" : "") + ">" + letter + "</strong>";
+  }
+
+  function spoken(letter) {
+    return global.Letters.spokenName(letter);
   }
 
   // ------------------------------------------------------------------------
-  // tiles and the grid
+  // tiles
   // ------------------------------------------------------------------------
 
   function makeTile(letter, id) {
@@ -25174,10 +25567,9 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     return el;
   }
 
-  /* Add or remove the ball-and-stick cue on every tricky tile. */
   function applyLetterHelper() {
-    for (var i = 0; i < state.tiles.length; i++) {
-      var tile = state.tiles[i];
+    for (var i = 0; i < state.pool.length; i++) {
+      var tile = state.pool[i];
       if (!global.Letters.isTricky(tile.letter)) continue;
 
       var existing = tile.el.querySelector(".tile-cue");
@@ -25191,169 +25583,159 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     }
   }
 
-  function buildGrid(letters) {
-    dom.grid.innerHTML = "";
-    state.tiles = [];
+  function poolById(id) {
+    for (var i = 0; i < state.pool.length; i++) {
+      if (state.pool[i].id === id) return state.pool[i];
+    }
+    return null;
+  }
 
-    for (var i = 0; i < letters.length; i++) {
+  // ------------------------------------------------------------------------
+  // drawing the word and the pile
+  // ------------------------------------------------------------------------
+
+  function renderWord() {
+    var word = state.puzzle.word;
+    var i;
+
+    dom.wordLine.innerHTML = "";
+    state.holes = [];
+
+    // Shrink-wrapped around the word so the writing line drawn under it is
+    // the width of the word, not the width of the box.
+    var inner = document.createElement("span");
+    inner.className = "word-inner";
+
+    for (i = 0; i < word.length; i++) {
+      var letter = word[i];
+      var cell = document.createElement("span");
+      cell.className = "wcell";
+
+      if (state.puzzle.holes.indexOf(i) === -1) {
+        // A letter she can already see. The six keep their colour, so the
+        // word on screen and the tiles in the pile speak the same language.
+        if (global.Letters.isTricky(letter)) {
+          cell.classList.add("is-tricky", global.Letters.colourClass(letter));
+        }
+        cell.textContent = letter;
+      } else {
+        var hole = document.createElement("span");
+        // The index is the hole's place in the queue, not in the word:
+        // dragdrop hands this straight back and state.holes is in the same
+        // order.
+        hole.setAttribute("data-index", String(state.holes.length));
+        hole.className = "hole";
+        cell.appendChild(hole);
+        state.holes.push({ at: i, letter: letter, el: hole, filled: false });
+      }
+
+      inner.appendChild(cell);
+    }
+    dom.wordLine.appendChild(inner);
+
+    dom.wordLine.setAttribute("aria-label",
+      "Finish the word: " + word.split("").map(function (ch, at) {
+        return state.puzzle.holes.indexOf(at) === -1 ? ch : "blank";
+      }).join(" "));
+
+    paintPicked();
+    fitWord();
+  }
+
+  /* Shrink the word until it fits on one line.
+
+     Eight letters at full size do not fit across a phone held upright, and a
+     word split over two lines has nowhere sensible to draw the writing line
+     — which is the one piece of furniture the b/d/p/q lesson depends on.
+     Measuring is exact rather than a guess: a cell is one --word-tile wide
+     and the gap between them is knowable, so this never lays out twice. */
+  function fitWord() {
+    var inner = dom.wordLine.querySelector(".word-inner");
+    if (!inner || !state.puzzle) return;
+
+    dom.wordLine.style.removeProperty("--word-tile");
+
+    // Measured off a real cell rather than read from --word-tile: a custom
+    // property holding a clamp() computes to the clamp() itself, and only
+    // turns into pixels where it is finally used.
+    var cell = inner.querySelector(".wcell");
+    var full = cell ? cell.getBoundingClientRect().width : 0;
+
+    var rowStyle = global.getComputedStyle(dom.wordLine);
+    var gap = parseFloat(global.getComputedStyle(inner).columnGap) || 0;
+    var count = state.puzzle.word.length;
+    if (!full || !count) return;
+
+    var room = dom.wordLine.clientWidth -
+               parseFloat(rowStyle.paddingLeft) -
+               parseFloat(rowStyle.paddingRight) -
+               RULE_OVERHANG * 2;
+    var wanted = count * full + (count - 1) * gap;
+
+    if (room > 0 && wanted > room) {
+      var scaled = (room - (count - 1) * gap) / count;
+      dom.wordLine.style.setProperty("--word-tile", Math.max(scaled, 20) + "px");
+    }
+    checkWrap();
+  }
+
+  /* Belt and braces. fitWord should have made this impossible, but a font
+     that loads late or a stylesheet that does not could still wrap the word,
+     and a writing line drawn under half of it looks broken. */
+  function checkWrap() {
+    var cells = dom.wordLine.querySelectorAll(".wcell");
+    var wrapped = false;
+
+    if (cells.length > 1) {
+      var top = cells[0].getBoundingClientRect().top;
+      for (var i = 1; i < cells.length; i++) {
+        if (Math.abs(cells[i].getBoundingClientRect().top - top) > 2) {
+          wrapped = true;
+          break;
+        }
+      }
+    }
+    dom.wordLine.classList.toggle("is-wrapped", wrapped);
+  }
+
+  function renderPool() {
+    dom.pool.innerHTML = "";
+    state.pool = [];
+
+    for (var i = 0; i < state.puzzle.pool.length; i++) {
+      var letter = state.puzzle.pool[i];
+
       var slot = document.createElement("div");
       slot.className = "slot";
 
-      var el = makeTile(letters[i], i);
+      var el = makeTile(letter, i);
       slot.appendChild(el);
-      dom.grid.appendChild(slot);
+      dom.pool.appendChild(slot);
 
-      state.tiles.push({ id: i, letter: letters[i], el: el, slotEl: slot });
+      state.pool.push({ id: i, letter: letter, el: el, slotEl: slot, used: false });
     }
     applyLetterHelper();
   }
 
-  /* Same letters, new places. Only tiles still in the grid move. */
-  function shuffleGrid() {
-    var homeSlots = [];
-    var homeTiles = [];
-
-    for (var i = 0; i < state.tiles.length; i++) {
-      var tile = state.tiles[i];
-      if (tile.el.parentElement === tile.slotEl) {
-        homeSlots.push(tile.slotEl);
-        homeTiles.push(tile);
-      }
+  function openHoles() {
+    var open = [];
+    for (var i = 0; i < state.holes.length; i++) {
+      if (!state.holes[i].filled) open.push(i);
     }
-    if (homeTiles.length < 2) return;
+    return open;
+  }
 
-    global.Grid.shuffle(homeTiles);
-    for (var j = 0; j < homeSlots.length; j++) {
-      var box = homeTiles[j].el.getBoundingClientRect();
-      homeSlots[j].appendChild(homeTiles[j].el);
-      homeTiles[j].slotEl = homeSlots[j];
-      global.DragDrop.flyFrom(homeTiles[j].el, box);
+  /* Which hole a tapped letter drops into. Only worth showing when there is
+     more than one to choose between. */
+  function paintPicked() {
+    var open = openHoles();
+    if (open.indexOf(state.picked) === -1) state.picked = open.length ? open[0] : 0;
+
+    for (var i = 0; i < state.holes.length; i++) {
+      state.holes[i].el.classList.toggle(
+        "is-picked", open.length > 1 && i === state.picked
+      );
     }
-    global.Sound.shuffle();
-  }
-
-  // ------------------------------------------------------------------------
-  // the word line
-  // ------------------------------------------------------------------------
-
-  function makeGap(index) {
-    var gap = document.createElement("div");
-    gap.className = "gap";
-    gap.setAttribute("data-index", String(index));
-    if (index === state.caret && state.line.length) gap.classList.add("is-caret");
-    return gap;
-  }
-
-  function renderLine() {
-    if (state.caret > state.line.length) state.caret = state.line.length;
-
-    var fragment = document.createDocumentFragment();
-    fragment.appendChild(makeGap(0));
-
-    for (var i = 0; i < state.line.length; i++) {
-      fragment.appendChild(tileById(state.line[i]).el);
-      fragment.appendChild(makeGap(i + 1));
-    }
-
-    // Detaches the tiles, which are immediately put back by the fragment.
-    dom.wordLine.textContent = "";
-    dom.wordLine.appendChild(dom.wordLineEmpty);
-    dom.wordLine.appendChild(fragment);
-    dom.wordLine.classList.toggle("has-letters", state.line.length > 0);
-
-    refreshCheckButton();
-  }
-
-  /* Letters still sitting in the grid, as a 26 slot count. These are the ones
-     she could actually reach to finish a word off. */
-  function freeLetters() {
-    var letters = "";
-    for (var i = 0; i < state.tiles.length; i++) {
-      if (state.line.indexOf(state.tiles[i].id) === -1) {
-        letters += state.tiles[i].letter;
-      }
-    }
-    return global.Dictionary.countLetters(letters);
-  }
-
-  function refreshCheckButton() {
-    var word = currentWord();
-    var isWord = word.length >= MIN_WORD &&
-                 global.Dictionary.has(word) &&
-                 !state.foundSet.has(word);
-
-    dom.checkBtn.disabled = word.length < MIN_WORD;
-    dom.checkBtn.classList.toggle("is-glowing", isWord && settings.wordGlow);
-    dom.wordLine.classList.toggle("is-word", isWord && settings.wordGlow);
-    dom.soundOutBtn.disabled = word.length === 0;
-
-    updateKitten(word, isWord);
-  }
-
-  /* The kitten's mood follows the word line: nothing, something, nearly, got
-     it. Only the "nearly" case costs a dictionary search, and only when the
-     line is not already a word. */
-  function updateKitten(word, isWord) {
-    if (!state.running) return;
-
-    var mood = "idle";
-    if (isWord) {
-      mood = "ready";
-    } else if (word.length) {
-      // oneAwayFromWord ignores single letters, so the first tile down always
-      // lands on "watching" — she gets a reaction from the very first tap.
-      mood = global.Dictionary.oneAwayFromWord(word, freeLetters())
-        ? "close"
-        : "watching";
-    }
-    global.Kitten.setState(mood);
-  }
-
-  function removeFromLine(id) {
-    var at = state.line.indexOf(id);
-    if (at === -1) return -1;
-    state.line.splice(at, 1);
-    if (state.caret > at) state.caret--;
-    return at;
-  }
-
-  function placeInLine(tile, index, ghostRect) {
-    var previous = removeFromLine(tile.id);
-    if (previous !== -1 && previous < index) index--;
-
-    index = Math.max(0, Math.min(index, state.line.length));
-    state.line.splice(index, 0, tile.id);
-    state.caret = index + 1;
-
-    renderLine();
-    global.DragDrop.flyFrom(tile.el, ghostRect);
-    global.Sound.place();
-    clearMessage();
-  }
-
-  function sendHome(tile, ghostRect) {
-    removeFromLine(tile.id);
-    tile.slotEl.appendChild(tile.el);
-    renderLine();
-    global.DragDrop.flyFrom(tile.el, ghostRect);
-    global.Sound.remove();
-    clearMessage();
-  }
-
-  function clearLine() {
-    if (!state.line.length) return;
-
-    for (var i = 0; i < state.line.length; i++) {
-      var tile = tileById(state.line[i]);
-      var box = tile.el.getBoundingClientRect();
-      tile.slotEl.appendChild(tile.el);
-      global.DragDrop.flyFrom(tile.el, box);
-    }
-    state.line = [];
-    state.caret = 0;
-    renderLine();
-    global.Sound.remove();
-    clearMessage();
   }
 
   // ------------------------------------------------------------------------
@@ -25363,7 +25745,6 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   function showMessage(html, tone) {
     dom.message.innerHTML = html;
     dom.message.className = "message is-shown" + (tone ? " is-" + tone : "");
-    // Restart the pop animation even when the same message repeats.
     void dom.message.offsetWidth;
     dom.message.classList.add("is-shown");
   }
@@ -25376,222 +25757,199 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   }
 
   // ------------------------------------------------------------------------
-  // checking a word
+  // putting a letter in a hole
   // ------------------------------------------------------------------------
 
-  function wobble(indexes) {
-    for (var i = 0; i < indexes.length; i++) {
-      var tile = tileById(state.line[indexes[i]]);
-      if (!tile) continue;
-      tile.el.classList.remove("is-nudged");
-      void tile.el.offsetWidth;
-      tile.el.classList.add("is-nudged");
-    }
-    global.setTimeout(function () {
-      var all = document.querySelectorAll(".tile.is-nudged");
-      for (var j = 0; j < all.length; j++) all[j].classList.remove("is-nudged");
-    }, 1700);
-  }
+  function finishSettle() {
+    if (!state.settling) return;
+    global.clearTimeout(state.settleTimer);
+    state.settling = false;
 
-  function rejectLine() {
-    dom.wordLine.classList.remove("is-wrong");
-    void dom.wordLine.offsetWidth;
-    dom.wordLine.classList.add("is-wrong");
-    global.setTimeout(function () {
-      dom.wordLine.classList.remove("is-wrong");
-    }, 450);
-  }
-
-  function checkWord() {
-    if (!state.running || state.paused) return;
-
-    var word = currentWord();
-    if (word.length < MIN_WORD) {
-      showMessage("Words need at least " + MIN_WORD + " letters", "nudge");
-      global.Sound.nudge();
-      return;
-    }
-
-    if (word.length > MAX_WORD) {
-      showMessage("That's longer than any word in our dictionary! Try a shorter one", "nudge");
-      global.Sound.nudge();
-      rejectLine();
-      return;
-    }
-
-    if (state.foundSet.has(word)) {
-      showMessage("You already found <strong>" + word + "</strong>! Try another one", "nudge");
-      global.Sound.repeat();
-      rejectLine();
-      return;
-    }
-
-    if (global.Dictionary.has(word)) {
-      acceptWord(word);
-    } else {
-      rejectWord(word);
+    // Whichever tile was mid-fall goes home now, wherever it had got to.
+    for (var i = 0; i < state.pool.length; i++) {
+      var item = state.pool[i];
+      if (item.used || item.el.parentElement === item.slotEl) continue;
+      item.el.classList.remove("is-rejected");
+      item.slotEl.appendChild(item.el);
     }
   }
 
-  /* The heart of it: when a word fails, is it only failing because a b is
-     really a d, or an n is really an m? */
-  function rejectWord(word) {
-    rejectLine();
-    global.Sound.nudge();
-    global.Kitten.react("nudge");
+  function sendHome(item, ghostRect) {
+    if (item.el.parentElement !== item.slotEl) {
+      item.slotEl.appendChild(item.el);
+    }
+    global.DragDrop.flyFrom(item.el, ghostRect);
+  }
 
-    var available = global.Dictionary.countLetters(allLetters());
-    var confusion = global.Dictionary.confusionMiss(word, available);
+  function lockIn(item, hole, ghostRect) {
+    hole.filled = true;
+    hole.el.classList.add("is-filled");
+    hole.el.classList.remove("is-picked", "is-active");
+    hole.el.appendChild(item.el);
+    item.el.classList.add("is-right");
 
-    if (confusion) {
-      // Usually one letter is to blame, but sometimes two are, and the hint
-      // has to name every tile it is about to wobble.
-      var shown = [];
-      var spoken = [];
-      var humps = false;
-      var balls = false;
+    item.used = true;
+    item.slotEl.classList.add("is-used");
 
-      for (var i = 0; i < confusion.swaps.length; i++) {
-        var letter = word[confusion.swaps[i]];
-        shown.push("<strong class=\"" + global.Letters.colourClass(letter) + "\">" +
-                   letter + "</strong>");
-        spoken.push(global.Letters.spokenName(letter));
-        if (global.Letters.info(letter).humps) humps = true;
-        else balls = true;
-      }
+    global.DragDrop.flyFrom(item.el, ghostRect);
+    global.Sound.place();
+    global.Kitten.watch(hole.el);
 
-      var question = humps && balls
-        ? "have they got it the right way round?"
-        : (humps ? "how many humps should it have?"
-                 : "which side should the ball be on?");
+    clearHints();
+    paintPicked();
 
-      var joined = shown.length > 1
-        ? shown.slice(0, -1).join(", ") + " and " + shown[shown.length - 1]
-        : shown[0];
-      var joinedSpoken = spoken.length > 1
-        ? spoken.slice(0, -1).join(", ") + " and " + spoken[spoken.length - 1]
-        : spoken[0];
+    if (!openHoles().length) {
+      solve();
+      return;
+    }
 
+    global.Kitten.setState("close");
+    showMessage("Yes! One more to find…", "good");
+  }
+
+  /* The word her choice would have spelled, with the other holes assumed
+     right. Used to tell her when a wrong letter is still a real word, which
+     happens constantly with b and d and is worth saying out loud. */
+  function wordWith(hole, letter) {
+    var word = state.puzzle.word;
+    return word.slice(0, hole.at) + letter + word.slice(hole.at + 1);
+  }
+
+  function noteWobble(right, wrong) {
+    var key = [right, wrong].sort().join("");
+    state.wobbly.set(key, (state.wobbly.get(key) || 0) + 1);
+  }
+
+  /* Document-wide, not just the pile: a hinted tile she then drops into a
+     hole takes the class with it, and a locked-in answer that carries on
+     pulsing looks like the game is still asking. */
+  function clearHints() {
+    var hinted = document.querySelectorAll(".tile.is-hinted");
+    for (var i = 0; i < hinted.length; i++) hinted[i].classList.remove("is-hinted");
+  }
+
+  /* After a second miss, lift the right letter and the one it is muddled
+     with out of the pile — without saying which is which. Narrowing six
+     choices to two is a scaffold; telling her the answer is not. */
+  function highlightCandidates(hole) {
+    var wanted = [hole.letter];
+    var partner = global.Letters.partnerOf(hole.letter);
+    if (partner) wanted.push(partner);
+
+    clearHints();
+    for (var i = 0; i < state.pool.length; i++) {
+      var item = state.pool[i];
+      if (item.used || wanted.indexOf(item.letter) === -1) continue;
+      void item.el.offsetWidth;
+      item.el.classList.add("is-hinted");
+    }
+    global.setTimeout(clearHints, 3400);
+  }
+
+  /* The heart of it. She has picked the wrong letter — which wrong letter,
+     and why, is the whole lesson. */
+  function explainMiss(wrong, hole) {
+    var right = hole.letter;
+    var word = state.puzzle.word;
+
+    if (global.Letters.partnerOf(right) === wrong) {
+      // The exact mix-up this game exists for. Name the shape she chose,
+      // then ask the question that separates the two — never which one is
+      // right, or there is nothing left for her to work out.
+      var info = global.Letters.info(wrong);
+      var question = info.humps
+        ? "how many humps does this one need?"
+        : "which side should the ball be on?";
+
+      noteWobble(right, wrong);
       showMessage(
-        "So close, " + PLAYER + "! Look hard at the " + joined +
-        " &mdash; " + question,
+        "That one's a " + coloured(wrong) + " &mdash; " + info.hint +
+        ". Listen again: <strong>" + word + "</strong>. " + cap(question),
         "nudge"
       );
-      wobble(confusion.swaps);
-
       global.Speech.say(
-        "Ooh, so close. Look carefully at the " + joinedSpoken + ". " +
-        question.charAt(0).toUpperCase() + question.slice(1),
+        "That's a " + spoken(wrong) + ". " + cap(info.hint) + ". " +
+        "Listen again. " + word + ". " + cap(question),
+        { rate: 0.9 }
+      );
+      return;
+    }
+
+    var attempt = wordWith(hole, wrong);
+    if (global.Dictionary.has(attempt) && attempt !== word) {
+      showMessage(
+        "That spells <strong>" + attempt + "</strong> &mdash; a real word! " +
+        "But we want <strong>" + word + "</strong>.",
+        "nudge"
+      );
+      global.Speech.say(
+        "That spells " + attempt + ". A real word, but we want " + word + ".",
         { rate: 0.92 }
       );
       return;
     }
 
-    var near = global.Dictionary.nearMiss(word, available);
-    if (near) {
-      var nudgeText = {
-        add: "one letter is missing",
-        remove: "there is one letter too many",
-        change: "one letter needs changing",
-        swap: "two letters are the wrong way round"
-      }[near.kind];
+    showMessage(
+      "Not that one. The word is <strong>" + word + "</strong> &mdash; have another go!",
+      "nudge"
+    );
+    global.Speech.say("Not that one. The word is " + word + ".", { rate: 0.92 });
+  }
 
+  function rejectDrop(item, hole) {
+    state.misses++;
+
+    // Show it sitting in the hole first: she needs to see the letter she
+    // actually chose, in place, before it goes anywhere.
+    hole.el.appendChild(item.el);
+    item.el.classList.remove("is-rejected");
+    void item.el.offsetWidth;
+    item.el.classList.add("is-rejected");
+
+    global.Sound.nudge();
+    global.Kitten.react("nudge");
+    explainMiss(item.letter, hole);
+
+    if (state.misses === 2) highlightCandidates(hole);
+    if (state.misses === 5) {
       showMessage(
-        "Nearly! <strong>" + word + "</strong> isn't a word, but " + nudgeText,
+        "Still tricky? Tap <strong>Skip</strong> and we'll find you another one.",
         "nudge"
       );
-      global.Speech.say("Nearly. " + nudgeText + ".", { rate: 0.92 });
+    }
+
+    state.settling = true;
+    global.clearTimeout(state.settleTimer);
+    state.settleTimer = global.setTimeout(function () {
+      state.settling = false;
+      if (item.used) return;
+
+      var box = item.el.getBoundingClientRect();
+      item.el.classList.remove("is-rejected");
+      item.slotEl.appendChild(item.el);
+      global.DragDrop.flyFrom(item.el, box);
+    }, SETTLE_MS);
+  }
+
+  function tryDrop(item, holeIndex, ghostRect) {
+    var hole = state.holes[holeIndex];
+    if (!hole || hole.filled || item.used) {
+      sendHome(item, ghostRect);
       return;
     }
 
-    showMessage("<strong>" + word + "</strong> isn't in our dictionary. Have another go!", "nudge");
-    global.Speech.say("Not quite. Have another go.", { rate: 0.95 });
+    if (item.letter === hole.letter) lockIn(item, hole, ghostRect);
+    else rejectDrop(item, hole);
   }
 
-  function acceptWord(word) {
-    var entry = global.Dictionary.lookup(word);
-    var tricky = trickyCount(word);
-    var points = (POINTS[word.length] || POINTS[POINTS.length - 1]) + tricky * TRICKY_BONUS;
+  // ------------------------------------------------------------------------
+  // finishing a word
+  // ------------------------------------------------------------------------
 
-    state.score += points;
-    state.trickyUsed += tricky;
-    state.foundSet.add(word);
-    state.found.unshift({ word: word, points: points, entry: entry });
-
-    if (records.collection.indexOf(word) === -1) records.collection.push(word);
-
-    celebrate(word, points, tricky, entry);
-    returnLineToGrid();
-    updateScore();
-    addFoundChip(word, points);
-  }
-
-  /* "Nice one!" becomes "Nice one, Meepsie!" a bit under half the time. The
-     cheer is both shown and spoken, so she hears her name too. */
-  function cheerFor(word) {
-    var cheer = pick(word.length >= 6 ? BIG_PRAISE : PRAISE);
+  function cheerFor(big) {
+    var cheer = pick(big ? BIG_PRAISE : PRAISE);
     if (Math.random() > NAME_CHANCE) return cheer;
     return cheer.replace(/[!.]+$/, "") + ", " + pick(NAMES) + "!";
-  }
-
-  function celebrate(word, points, tricky, entry) {
-    var big = word.length >= 6;
-    var praise = cheerFor(word);
-
-    var extra = tricky
-      ? " <span class=\"pts\">+" + points + "</span> &nbsp;<em>tricky letter bonus!</em>"
-      : " <span class=\"pts\">+" + points + "</span>";
-    showMessage(praise + " <strong>" + word + "</strong>" + extra, "good");
-
-    global.Sound.success(word.length);
-    global.Kitten.react(big ? "bigcheer" : "cheer");
-    global.Confetti.burstFrom(dom.wordLine, big ? 1.4 : 1);
-    flyWordToList(word);
-
-    global.Speech.foundWord(entry, praise, settings.speakDefinitions);
-  }
-
-  /* A ghost of the word arcs from the line over to the found list. */
-  function flyWordToList(word) {
-    if (settings.calm) return;
-
-    var from = dom.wordLine.getBoundingClientRect();
-    var target = dom.foundCount.getBoundingClientRect();
-
-    var ghost = document.createElement("div");
-    ghost.className = "flying-word";
-    ghost.textContent = word;
-    ghost.style.left = (from.left + from.width / 2) + "px";
-    ghost.style.top = (from.top + from.height / 2) + "px";
-    document.body.appendChild(ghost);
-
-    var dx = (target.left + target.width / 2) - (from.left + from.width / 2);
-    var dy = (target.top + target.height / 2) - (from.top + from.height / 2);
-
-    global.requestAnimationFrame(function () {
-      ghost.style.transform = "translate(-50%,-50%) translate(" + dx + "px," + dy + "px) scale(.28)";
-      ghost.style.opacity = "0";
-    });
-    global.setTimeout(function () { ghost.remove(); }, 760);
-  }
-
-  function returnLineToGrid() {
-    for (var i = 0; i < state.line.length; i++) {
-      var tile = tileById(state.line[i]);
-      var box = tile.el.getBoundingClientRect();
-
-      tile.slotEl.appendChild(tile.el);
-      global.DragDrop.flyFrom(tile.el, box);
-
-      tile.el.classList.add("is-landing");
-      /* jshint loopfunc: true */
-      (function (element) {
-        global.setTimeout(function () { element.classList.remove("is-landing"); }, 340);
-      })(tile.el);
-    }
-    state.line = [];
-    state.caret = 0;
-    renderLine();
   }
 
   function updateScore() {
@@ -25601,31 +25959,167 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     dom.scoreValue.classList.add("is-bumped");
   }
 
-  function addFoundChip(word, points) {
-    var chip = document.createElement("li");
+  function addSolvedChip(word, points) {
+    dom.foundCount.textContent = String(state.solved.length);
 
+    var item = document.createElement("li");
     var button = document.createElement("button");
     button.type = "button";
     button.className = "found-word is-new";
-    button.appendChild(document.createTextNode(word));
+    button.innerHTML = word + " <span class=\"pts\">+" + points + "</span>";
+    button.addEventListener("click", function () { speakWord(word); });
 
-    var pts = document.createElement("span");
-    pts.className = "pts";
-    pts.textContent = "+" + points;
-    button.appendChild(pts);
-
-    button.addEventListener("click", function () {
-      speakEntry(word);
-    });
-
-    chip.appendChild(button);
-    dom.foundList.insertBefore(chip, dom.foundList.firstChild);
-    dom.foundCount.textContent = state.found.length;
+    item.appendChild(button);
+    dom.foundList.insertBefore(item, dom.foundList.firstChild);
   }
 
-  function speakEntry(word) {
+  function speakWord(word) {
     var entry = global.Dictionary.lookup(word);
-    if (entry) global.Speech.foundWord(entry, "", true);
+    var phrases = [{ text: word, rate: 0.8, pitch: 1.05 }];
+    if (settings.speakDefinitions && entry && entry.definition) {
+      phrases.push({ text: entry.definition + ".", rate: 0.92 });
+    }
+    global.Speech.sayAll(phrases);
+  }
+
+  function solve() {
+    var puzzle = state.puzzle;
+    var word = puzzle.word;
+    var clean = state.misses === 0;
+    var big = word.length >= 6 || puzzle.holes.length > 1;
+    var i;
+
+    var tricky = 0;
+    for (i = 0; i < puzzle.holes.length; i++) {
+      if (global.Letters.isTricky(word[puzzle.holes[i]])) tricky++;
+    }
+
+    var points = (POINTS[word.length] || POINTS[POINTS.length - 1]) +
+                 tricky * TRICKY_BONUS + (clean ? CLEAN_BONUS : 0);
+
+    state.score += points;
+    state.trickyFixed += tricky;
+    if (clean) state.firstTime++;
+    state.solved.unshift({ word: word, points: points, clean: clean });
+    if (records.collection.indexOf(word) === -1) records.collection.push(word);
+
+    // The ladder. Two clean answers in a row and the words get longer and
+    // less common; a word that took a few goes drops her back a rung. She
+    // should be working, never drowning.
+    if (clean) {
+      state.cleanRun++;
+      if (state.cleanRun >= 2) {
+        state.level = Math.min(state.level + 1, global.Puzzle.levelCount - 1);
+        state.cleanRun = 0;
+      }
+    } else {
+      state.cleanRun = 0;
+      if (state.misses >= 2) state.level = Math.max(state.level - 1, 0);
+    }
+
+    var praise = cheerFor(big);
+    dom.wordLine.classList.add("is-solved");
+    clearHints();
+
+    showMessage(
+      praise + " <strong>" + word + "</strong> <span class=\"pts\">+" + points + "</span>" +
+      (clean ? " &nbsp;<em>first go!</em>" : ""),
+      "good"
+    );
+
+    global.Sound.success(word.length);
+    global.Kitten.react(big ? "bigcheer" : "cheer");
+    global.Confetti.burstFrom(dom.wordLine, big ? 1.4 : 1);
+    global.Speech.sayAll([
+      { text: praise, rate: 1.02, pitch: 1.15 },
+      { text: word, rate: 0.82, pitch: 1.1 }
+    ]);
+
+    updateScore();
+    addSolvedChip(word, points);
+
+    global.clearTimeout(state.advance);
+    state.advance = global.setTimeout(function () {
+      nextPuzzle(null);
+    }, big ? ADVANCE_BIG_MS : ADVANCE_MS);
+  }
+
+  function skipWord() {
+    if (!state.running || state.paused || !state.puzzle) return;
+
+    var word = state.puzzle.word;
+    state.cleanRun = 0;
+    state.level = Math.max(state.level - 1, 0);
+
+    global.Sound.remove();
+    nextPuzzle("That one was " + word + ".");
+    showMessage(
+      "That one was <strong>" + word + "</strong>. Here's another, " + PLAYER + "!",
+      "nudge"
+    );
+  }
+
+  // ------------------------------------------------------------------------
+  // the next word
+  // ------------------------------------------------------------------------
+
+  /* The definitions arrive in the background, so a word chosen in the first
+     second of a round may have picked up a meaning by the time she asks for
+     it. Always look again before speaking. */
+  function currentEntry() {
+    if (!state.puzzle) return null;
+    var entry = state.puzzle.entry;
+    if (entry && entry.definition) return entry;
+
+    var fresh = global.Dictionary.lookup(state.puzzle.word);
+    if (fresh && fresh.definition) {
+      state.puzzle.entry = fresh;
+      return fresh;
+    }
+    return entry;
+  }
+
+  function sayPuzzle(lead) {
+    var entry = currentEntry();
+    var phrases = [];
+
+    if (lead) phrases.push({ text: lead, rate: 0.95 });
+    phrases.push({ text: state.puzzle.word, rate: 0.78, pitch: 1.06 });
+
+    if (settings.speakDefinitions && entry && entry.definition) {
+      var from = entry.base && entry.base !== entry.word
+        ? "From " + entry.base + ". " : "";
+      phrases.push({ text: from + entry.definition + ".", rate: 0.92 });
+    }
+    global.Speech.sayAll(phrases);
+  }
+
+  function nextPuzzle(lead) {
+    global.clearTimeout(state.advance);
+    finishSettle();
+    clearHints();
+    if (!state.running || state.paused) return;
+
+    var puzzle = global.Puzzle.make(state.level, state.used);
+    if (!puzzle) {
+      // Only reachable if she has exhausted every word at every level, which
+      // would be a remarkable five minutes.
+      endRound(true);
+      return;
+    }
+
+    state.puzzle = puzzle;
+    state.used.add(puzzle.word);
+    state.misses = 0;
+    state.picked = 0;
+
+    dom.wordLine.classList.remove("is-solved", "is-wrapped");
+    clearMessage();
+    renderWord();
+    renderPool();
+
+    global.Kitten.setState("watching");
+    if (settings.autoSay) sayPuzzle(lead);
   }
 
   // ------------------------------------------------------------------------
@@ -25670,39 +26164,36 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   // ------------------------------------------------------------------------
 
   function startRound() {
-    var grid = global.Grid.generate(GRID_SIZE);
-
     state.running = true;
     state.paused = false;
     state.score = 0;
-    state.line = [];
-    state.caret = 0;
-    state.found = [];
-    state.foundSet = new Set();
-    state.trickyUsed = 0;
-    state.gridWords = grid.words;
+    state.level = 0;
+    state.cleanRun = 0;
+    state.solved = [];
+    state.used = new Set();
+    state.firstTime = 0;
+    state.trickyFixed = 0;
+    state.wobbly = new Map();
     state.secondsLeft = state.minutes * 60;
-
-    buildGrid(grid.letters);
-    global.Kitten.reset();
-    renderLine();
 
     dom.foundList.innerHTML = "";
     dom.foundCount.textContent = "0";
     dom.scoreValue.textContent = "0";
-    clearMessage();
     dom.app.classList.remove("is-paused");
 
+    global.Kitten.reset();
     paintClock();
     startClock();
-
     global.Sound.start();
+
+    nextPuzzle(null);
   }
 
   function pauseRound() {
     if (!state.running || state.paused) return;
     state.paused = true;
     stopClock();
+    global.clearTimeout(state.advance);
     global.Speech.stop();
     global.Kitten.setState("sleep");
     dom.app.classList.add("is-paused");
@@ -25724,6 +26215,8 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     state.running = false;
     state.paused = false;
     stopClock();
+    global.clearTimeout(state.advance);
+    finishSettle();
     global.Speech.stop();
     dom.app.classList.remove("is-paused");
     closeOverlay(dom.pauseScreen);
@@ -25736,12 +26229,58 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     showResults(quit);
   }
 
-  function longestFound() {
-    var longest = "";
-    for (var i = 0; i < state.found.length; i++) {
-      if (state.found[i].word.length > longest.length) longest = state.found[i].word;
+  /* The pairs that went wrong, worst first. This is the one thing on the
+     results screen that is really for whoever is sitting next to her. */
+  function renderWobbly() {
+    var pairs = [];
+    state.wobbly.forEach(function (count, key) {
+      pairs.push({ key: key, count: count });
+    });
+    pairs.sort(function (a, b) { return b.count - a.count; });
+
+    dom.wobblyList.innerHTML = "";
+    for (var i = 0; i < pairs.length; i++) {
+      (function (pair) {
+        var a = pair.key[0];
+        var b = pair.key[1];
+
+        var chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "wobbly-pair";
+        chip.innerHTML =
+          "<b class=\"" + global.Letters.colourClass(a) + "\">" + a + "</b>" +
+          "<b class=\"" + global.Letters.colourClass(b) + "\">" + b + "</b>" +
+          "<span class=\"times\">" + pair.count +
+          (pair.count === 1 ? " time" : " times") + "</span>";
+
+        chip.addEventListener("click", function () {
+          global.Speech.sayAll([
+            { text: spoken(a) + ". " + global.Letters.describe(a) + ".", rate: 0.85 },
+            { text: spoken(b) + ". " + global.Letters.describe(b) + ".", rate: 0.85 }
+          ]);
+        });
+        dom.wobblyList.appendChild(chip);
+      })(pairs[i]);
     }
-    return longest;
+    dom.wobblyBlock.hidden = pairs.length === 0;
+  }
+
+  function renderSolvedList() {
+    dom.missedList.innerHTML = "";
+
+    for (var i = 0; i < state.solved.length; i++) {
+      (function (word) {
+        var item = document.createElement("li");
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "found-word";
+        button.textContent = word;
+        button.addEventListener("click", function () { speakWord(word); });
+        item.appendChild(button);
+        dom.missedList.appendChild(item);
+      })(state.solved[i].word);
+    }
+    dom.missedBlock.hidden = state.solved.length === 0;
   }
 
   function showResults(quit) {
@@ -25749,82 +26288,34 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       ? "Round finished, " + PLAYER
       : "Time's up, " + PLAYER + "!";
     dom.endScore.textContent = state.score;
-    dom.endWords.textContent = state.found.length;
-    dom.endLongest.textContent = longestFound() || "–";
-    dom.endTricky.textContent = state.trickyUsed;
+    dom.endWords.textContent = state.solved.length;
+    dom.endFirstTime.textContent = state.firstTime;
+    dom.endTricky.textContent = state.trickyFixed;
 
-    var note = "";
+    var note;
     if (state.score >= records.best && state.score > 0) {
       note = "A new best score, " + PLAYER + "! 🏆";
-    } else if (state.found.length >= 10) {
-      note = "Ten words or more. Brilliant work!";
-    } else if (state.trickyUsed >= 4) {
-      note = state.trickyUsed + " tricky letters used. That's the hard bit!";
-    } else if (state.found.length > 0) {
+    } else if (state.solved.length && state.firstTime === state.solved.length) {
+      note = "Every single one first go. That is properly good.";
+    } else if (state.trickyFixed >= 6) {
+      note = state.trickyFixed + " tricky letters put right. That's the hard bit!";
+    } else if (state.solved.length > 0) {
       note = "Well played, " + PLAYER + "!";
     } else {
-      note = "Have another go, " + PLAYER + " — you'll find one!";
+      note = "Have another go, " + PLAYER + " — you'll get one!";
     }
     dom.endNote.textContent = note;
 
-    renderMissed();
+    renderWobbly();
+    renderSolvedList();
 
-    if (state.found.length) {
+    if (state.solved.length) {
       global.Confetti.celebrate();
       global.Kitten.react("bigcheer");
     } else {
       global.Kitten.setState("sleep");
     }
     openOverlay(dom.endScreen);
-  }
-
-  /* A short, achievable set of words she did not find.
-
-     Sampled across lengths and shuffled, because the grid word list is
-     alphabetical and a screen full of words starting with "a" looks broken.
-     Everyday words come first and words with a definition next, so this
-     teaches something rather than showing off the dictionary. */
-  function suggestionRank(word) {
-    var entry = global.Dictionary.lookup(word);
-    return global.Dictionary.familiarity(word) * 2 +
-           (entry && entry.definition ? 0 : 1);
-  }
-
-  function renderMissed() {
-    var buckets = { 3: [], 4: [], 5: [] };
-
-    for (var i = 0; i < state.gridWords.length; i++) {
-      var word = state.gridWords[i];
-      if (state.foundSet.has(word) || !buckets[word.length]) continue;
-      buckets[word.length].push(word);
-    }
-
-    var missed = [];
-    [3, 4, 5].forEach(function (length) {
-      var pool = buckets[length];
-      // Sample rather than take the first few, which would all share a
-      // starting letter.
-      global.Grid.shuffle(pool);
-      pool.sort(function (a, b) { return suggestionRank(a) - suggestionRank(b); });
-      missed = missed.concat(pool.slice(0, 4));
-    });
-
-    missed.sort(function (a, b) { return a.length - b.length; });
-
-    dom.missedList.innerHTML = "";
-    for (var j = 0; j < missed.length; j++) {
-      (function (word) {
-        var item = document.createElement("li");
-        var button = document.createElement("button");
-        button.type = "button";
-        button.className = "found-word";
-        button.textContent = word;
-        button.addEventListener("click", function () { speakEntry(word); });
-        item.appendChild(button);
-        dom.missedList.appendChild(item);
-      })(missed[j]);
-    }
-    dom.missedBlock.hidden = missed.length === 0;
   }
 
   // ------------------------------------------------------------------------
@@ -25851,7 +26342,6 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       card.className = "help-card " + global.Letters.colourClass(letter);
 
       var tile = makeTile(letter, "help-" + letter);
-      tile.setAttribute("tabindex", "-1");
       tile.classList.add("has-helper");
       tile.appendChild(global.Letters.cue(letter));
       card.appendChild(tile);
@@ -25865,8 +26355,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       (function (l) {
         card.addEventListener("click", function () {
           global.Speech.say(
-            global.Letters.spokenName(l) + ". " + global.Letters.describe(l),
-            { rate: 0.85 }
+            spoken(l) + ". " + global.Letters.describe(l), { rate: 0.85 }
           );
         });
       })(letter);
@@ -25880,10 +26369,9 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   // ------------------------------------------------------------------------
 
   var SETTING_INPUTS = {
-    letterHelper: "setLetterHelper",
-    speakLetters: "setSpeakLetters",
+    autoSay: "setAutoSay",
     speakDefinitions: "setSpeakDefinitions",
-    wordGlow: "setWordGlow",
+    letterHelper: "setLetterHelper",
     kitten: "setKitten",
     sound: "setSound",
     calm: "setCalm"
@@ -25895,7 +26383,6 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     global.Confetti.calm = settings.calm;
     document.body.classList.toggle("calm", settings.calm);
     applyLetterHelper();
-    refreshCheckButton();
   }
 
   function wireSettings() {
@@ -25916,12 +26403,20 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   // keyboard
   // ------------------------------------------------------------------------
 
-  function freeTileFor(letter) {
-    for (var i = 0; i < state.tiles.length; i++) {
-      var tile = state.tiles[i];
-      if (tile.letter === letter && state.line.indexOf(tile.id) === -1) return tile;
+  function freePoolTile(letter) {
+    for (var i = 0; i < state.pool.length; i++) {
+      if (state.pool[i].letter === letter && !state.pool[i].used) return state.pool[i];
     }
     return null;
+  }
+
+  function movePicked(step) {
+    var open = openHoles();
+    if (open.length < 2) return;
+
+    var at = open.indexOf(state.picked);
+    state.picked = open[(at + step + open.length) % open.length];
+    paintPicked();
   }
 
   function onKeyDown(event) {
@@ -25936,37 +26431,23 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
     if (!state.running || state.paused || overlayOpen()) return;
 
-    if (event.key === "Enter") {
-      event.preventDefault();
-      checkWord();
-      return;
-    }
-    if (event.key === "Backspace") {
-      event.preventDefault();
-      var at = state.caret - 1;
-      if (at >= 0 && at < state.line.length) {
-        var leaving = tileById(state.line[at]);
-        sendHome(leaving, leaving.el.getBoundingClientRect());
-      }
-      return;
-    }
     if (event.key === " ") {
       event.preventDefault();
       pauseRound();
       return;
     }
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      movePicked(event.key === "ArrowLeft" ? -1 : 1);
+      return;
+    }
 
     if (/^[a-zA-Z]$/.test(event.key)) {
-      var tile = freeTileFor(event.key.toLowerCase());
-      if (!tile) {
-        showMessage("No <strong>" + event.key.toLowerCase() + "</strong> left to use", "nudge");
-        global.Sound.nudge();
-        return;
-      }
+      var item = freePoolTile(event.key.toLowerCase());
+      if (!item) return;
+
       event.preventDefault();
-      var box = tile.el.getBoundingClientRect();
-      placeInLine(tile, state.caret, box);
-      if (settings.speakLetters) global.Speech.letter(tile.letter);
+      tryDrop(item, state.picked, item.el.getBoundingClientRect());
     }
   }
 
@@ -25977,47 +26458,49 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   function wireDragDrop() {
     global.DragDrop.init({
       lineEl: dom.wordLine,
+      gapSelector: ".hole",
+
+      // A hole that already has its letter is not a target any more.
+      gapFilter: function (holeEl) {
+        return !holeEl.classList.contains("is-filled");
+      },
+
+      // Every tile in this game lives in the pile and is on loan to a hole,
+      // so where it started never changes what letting go of it means.
+      fromFor: function () { return "pool"; },
 
       enabled: function () {
-        return state.running && !state.paused && !overlayOpen();
+        return state.running && !state.paused && !state.settling && !overlayOpen();
       },
 
       onPick: function (element) {
         global.Kitten.watch(element);
         global.Sound.pick();
-        if (settings.speakLetters) {
-          global.Speech.letter(element.getAttribute("data-letter"));
-        }
+        global.Speech.letter(element.getAttribute("data-letter"));
       },
 
-      onTap: function (element, from) {
-        var tile = tileById(parseInt(element.getAttribute("data-id"), 10));
-        if (!tile) return;
+      onTap: function (element) {
+        var item = poolById(parseInt(element.getAttribute("data-id"), 10));
+        if (!item || item.used) return;
 
-        var box = element.getBoundingClientRect();
-        if (from === "line") {
-          sendHome(tile, box);
-        } else {
-          placeInLine(tile, state.caret, box);
-          global.Sound.pick();
-          if (settings.speakLetters) global.Speech.letter(tile.letter);
-        }
+        global.Sound.pick();
+        global.Speech.letter(item.letter);
+        tryDrop(item, state.picked, element.getBoundingClientRect());
       },
 
       onDrop: function (element, index, from, ghostRect) {
-        var tile = tileById(parseInt(element.getAttribute("data-id"), 10));
-        if (!tile) return;
+        var item = poolById(parseInt(element.getAttribute("data-id"), 10));
+        if (!item) return;
 
-        if (index === null) {
-          sendHome(tile, ghostRect);
-        } else {
-          placeInLine(tile, index, ghostRect);
-        }
+        if (index === null) sendHome(item, ghostRect);
+        else tryDrop(item, index, ghostRect);
       },
 
       onGapTap: function (index) {
-        state.caret = index;
-        renderLine();
+        var hole = state.holes[index];
+        if (!hole || hole.filled) return;
+        state.picked = index;
+        paintPicked();
       }
     });
   }
@@ -26043,14 +26526,25 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       openOverlay(dom.startScreen);
     });
 
-    dom.checkBtn.addEventListener("click", checkWord);
-    dom.clearBtn.addEventListener("click", clearLine);
-    dom.shuffleBtn.addEventListener("click", shuffleGrid);
-
-    dom.soundOutBtn.addEventListener("click", function () {
-      var word = currentWord();
-      if (word) global.Speech.spellOut(word);
+    dom.sayWordBtn.addEventListener("click", function () {
+      if (!state.puzzle) return;
+      global.Speech.say(state.puzzle.word, { rate: 0.78, pitch: 1.06 });
     });
+
+    dom.sayMeaningBtn.addEventListener("click", function () {
+      if (!state.puzzle) return;
+      var entry = currentEntry();
+      if (entry && entry.definition) {
+        var from = entry.base && entry.base !== entry.word
+          ? "From " + entry.base + ". " : "";
+        global.Speech.say(from + entry.definition + ".", { rate: 0.92 });
+      } else {
+        showMessage("No meaning for that one, sorry! Here's the word again.", "nudge");
+        global.Speech.say(state.puzzle.word, { rate: 0.78, pitch: 1.06 });
+      }
+    });
+
+    dom.skipBtn.addEventListener("click", skipWord);
 
     dom.pauseBtn.addEventListener("click", function () {
       if (!state.running) return;
@@ -26099,6 +26593,10 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       if (document.hidden && state.running && !state.paused) pauseRound();
     });
 
+    global.addEventListener("resize", function () {
+      if (state.puzzle) fitWord();
+    });
+
     document.addEventListener("keydown", onKeyDown);
   }
 
@@ -26113,27 +26611,26 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
   function collectDom() {
     [
-      "app", "grid", "wordLine", "wordLineEmpty", "message", "checkBtn",
-      "clearBtn", "soundOutBtn", "shuffleBtn", "foundList", "foundCount",
-      "scoreValue", "timer", "timerText", "timerFill", "pauseBtn", "helpBtn",
-      "settingsBtn", "startScreen", "startBody", "loadingRow", "playBtn",
-      "durationChips", "bestScore", "collectionCount", "startHelpBtn",
-      "startSettingsBtn",
+      "app", "pool", "wordLine", "message", "sayWordBtn", "sayMeaningBtn",
+      "skipBtn", "foundList", "foundCount", "scoreValue", "timer",
+      "timerText", "timerFill", "pauseBtn", "helpBtn", "settingsBtn",
+      "startScreen", "startBody", "loadingRow", "playBtn", "durationChips",
+      "bestScore", "collectionCount", "startHelpBtn", "startSettingsBtn",
       "pauseScreen", "resumeBtn", "quitBtn", "endScreen", "endTitle",
-      "endScore", "endWords", "endLongest", "endTricky", "endNote",
-      "missedBlock", "missedList", "againBtn", "homeBtn", "helpScreen",
-      "helpCards", "helpCloseBtn", "settingsScreen", "settingsCloseBtn"
+      "endScore", "endWords", "endFirstTime", "endTricky", "endNote",
+      "wobblyBlock", "wobblyList", "missedBlock", "missedList", "againBtn",
+      "homeBtn", "helpScreen", "helpCards", "helpCloseBtn", "settingsScreen",
+      "settingsCloseBtn"
     ].forEach(function (id) {
       dom[id] = byId(id);
     });
   }
 
   /* The meanings are seven times the size of the word list, so they are
-     fetched only once she can already play. If they never arrive, words are
-     still found and celebrated - they just are not explained. */
+     fetched only once she can already play. Until they land, words are still
+     read out - they just are not explained. */
   function fetchDefinitions() {
     if (global.SPELLING_DEFINITIONS_RAW) {
-      // The standalone single-file build has them inline already.
       global.Dictionary.loadDefinitions();
       return;
     }
@@ -26160,7 +26657,6 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
     global.Confetti.init(byId("confetti"));
     global.Kitten.init(byId("kitten"));
-    state.foundSet = new Set();
 
     wireSettings();
     wireButtons();
@@ -26174,6 +26670,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     global.setTimeout(function () {
       try {
         global.Dictionary.load();
+        global.Puzzle.prepare();
       } catch (err) {
         dom.loadingRow.textContent =
           "Could not load the word list. Please check your connection and reload.";
@@ -26184,6 +26681,17 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       fetchDefinitions();
     }, 30);
   }
+
+  /* Exposed for the tests, which have to know the answer before they can
+     check that the right letter is taken and the wrong one is not. Same
+     reason kitten.js hands out its list of animations. */
+  global.MissingGame = {
+    puzzle: function () { return state.puzzle; },
+    level: function () { return state.level; },
+    misses: function () { return state.misses; },
+    solvedCount: function () { return state.solved.length; },
+    score: function () { return state.score; }
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1b2340">
-<title>Cooper's Word Game</title>
+<title>Cooper's Missing Letters</title>
 
 <script>
 /* First thing on the page, deliberately: everything below it — the
@@ -33,9 +33,10 @@
 <link rel="preload" href="data/words.js" as="script">
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/kitten.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+<link rel="stylesheet" href="css/missing.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>">
 </head>
-<body>
+<body class="game-missing">
 
 <canvas id="confetti" aria-hidden="true"></canvas>
 
@@ -70,9 +71,9 @@
 
   <main class="stage">
 
-    <section class="build" aria-label="Word you are building">
+    <section class="build" aria-label="The word to finish">
 
-      <!-- The kitten sits on the rim of the word line and watches. It is
+      <!-- The kitten sits on the rim of the word and watches. It is
            decoration, so it is hidden from screen readers; every reaction it
            has is also said in words by the message line below. -->
       <div class="kitten" id="kitten" aria-hidden="true">
@@ -125,7 +126,7 @@
                   d="M30 42 h-16 M30 47 h-15 M90 42 h16 M90 47 h15"/>
           </g>
 
-          <!-- shown only when she finds a word -->
+          <!-- shown only when she gets one right -->
           <g class="k-hearts">
             <path class="k-heart k-heart-1" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
             <path class="k-heart k-heart-2" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
@@ -141,38 +142,35 @@
         </svg>
       </div>
 
-      <div class="word-line" id="wordLine" role="list" aria-label="Letters in your word">
-        <p class="word-line-empty" id="wordLineEmpty">Tap letters to build a word</p>
+      <div class="word-line word-row" id="wordLine" aria-label="The word to finish">
+        <p class="word-line-empty" id="wordLineEmpty">Getting a word…</p>
       </div>
 
       <div class="build-actions">
-        <button class="btn btn-quiet" id="clearBtn" type="button">
-          <span aria-hidden="true">↩</span> Clear
+        <button class="btn btn-quiet" id="sayWordBtn" type="button">
+          <span aria-hidden="true">🔊</span> The word
         </button>
-        <button class="btn btn-quiet" id="soundOutBtn" type="button">
-          <span aria-hidden="true">🔊</span> Sound it out
+        <button class="btn btn-quiet" id="sayMeaningBtn" type="button">
+          <span aria-hidden="true">💬</span> What it means
         </button>
-        <button class="btn btn-go" id="checkBtn" type="button">
-          Check! <span aria-hidden="true">✓</span>
+        <button class="btn btn-quiet" id="skipBtn" type="button">
+          Skip <span aria-hidden="true">⏭</span>
         </button>
       </div>
 
       <p class="message" id="message" role="status" aria-live="polite"></p>
     </section>
 
-    <section class="grid-wrap" aria-label="Your letters">
-      <div class="grid" id="grid"></div>
-      <button class="btn btn-quiet btn-shuffle" id="shuffleBtn" type="button">
-        <span aria-hidden="true">🔀</span> Shuffle
-      </button>
+    <section class="grid-wrap" aria-label="Letters to choose from">
+      <div class="grid pool" id="pool"></div>
     </section>
 
-    <aside class="found" aria-label="Words you have found">
+    <aside class="found" aria-label="Words you have finished">
       <h2 class="found-title">
         Cooper's words <span class="found-count" id="foundCount">0</span>
       </h2>
       <ul class="found-list" id="foundList"></ul>
-      <p class="found-empty" id="foundEmpty">Your words will appear here, Cooper ✨</p>
+      <p class="found-empty" id="foundEmpty">Every word you finish lands here, Cooper ✨</p>
     </aside>
 
   </main>
@@ -181,8 +179,8 @@
 <!-- ─────────────────────────────  Start  ───────────────────────────── -->
 <div class="overlay is-open" id="startScreen">
   <div class="panel panel-start">
-    <h1 class="title">Cooper's<br>Word&nbsp;Game</h1>
-    <p class="subtitle">How many words can you make, Cooper?</p>
+    <h1 class="title">Cooper's<br>Missing&nbsp;Letters</h1>
+    <p class="subtitle">Which letter is hiding, Cooper?</p>
 
     <div class="loading" id="loadingRow">
       <span class="spinner" aria-hidden="true"></span>
@@ -190,6 +188,12 @@
     </div>
 
     <div class="start-body" id="startBody" hidden>
+      <p class="panel-text how-to">
+        Listen to the word, then drag the letter that belongs in the gap.
+        Watch out — the letter that looks nearly the same is usually sitting
+        right next to it.
+      </p>
+
       <div class="length-choice" role="group" aria-label="How long to play">
         <span class="length-label">Play for</span>
         <div class="chips" id="durationChips">
@@ -203,7 +207,7 @@
 
       <dl class="records" id="records">
         <div><dt>Cooper's best</dt><dd id="bestScore">0</dd></div>
-        <div><dt>Words collected</dt><dd id="collectionCount">0</dd></div>
+        <div><dt>Words finished</dt><dd id="collectionCount">0</dd></div>
       </dl>
 
       <div class="start-links">
@@ -212,7 +216,7 @@
       </div>
 
       <p class="other-game">
-        Fancy the other one? <a href="missing.html">Cooper's Missing Letters →</a>
+        Fancy the other one? <a href="index.html">Cooper's Word Game →</a>
       </p>
 
       <p class="dedication">Made for Cooper, with love from Dad 💜</p>
@@ -238,16 +242,24 @@
     <div class="result-stats">
       <div class="stat"><span class="stat-value" id="endScore">0</span><span class="stat-label">points</span></div>
       <div class="stat"><span class="stat-value" id="endWords">0</span><span class="stat-label">words</span></div>
-      <div class="stat"><span class="stat-value" id="endLongest">–</span><span class="stat-label">longest</span></div>
+      <div class="stat"><span class="stat-value" id="endFirstTime">0</span><span class="stat-label">first go</span></div>
       <div class="stat"><span class="stat-value" id="endTricky">0</span><span class="stat-label">tricky letters</span></div>
     </div>
 
     <p class="result-note" id="endNote"></p>
 
+    <!-- Only shown when she actually got some wrong. It is the one thing on
+         this screen that is really for whoever is sitting next to her. -->
+    <div class="missed" id="wobblyBlock" hidden>
+      <h3 class="missed-title">Still a bit wobbly</h3>
+      <div class="wobbly-list" id="wobblyList"></div>
+      <p class="missed-hint">Tap a pair to hear how to tell them apart</p>
+    </div>
+
     <div class="missed" id="missedBlock" hidden>
-      <h3 class="missed-title">You could also have made…</h3>
+      <h3 class="missed-title">Words you finished</h3>
       <ul class="missed-list" id="missedList"></ul>
-      <p class="missed-hint">Tap a word to hear what it means</p>
+      <p class="missed-hint">Tap a word to hear it again</p>
     </div>
 
     <div class="panel-actions">
@@ -309,21 +321,11 @@
     <ul class="settings-list">
       <li class="setting">
         <label class="switch">
-          <input type="checkbox" id="setLetterHelper" checked>
+          <input type="checkbox" id="setAutoSay" checked>
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           <span class="switch-text">
-            <strong>Letter helper</strong>
-            <small>Show the ball-and-stick shape under b d p q n m</small>
-          </span>
-        </label>
-      </li>
-      <li class="setting">
-        <label class="switch">
-          <input type="checkbox" id="setSpeakLetters" checked>
-          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-          <span class="switch-text">
-            <strong>Say each letter</strong>
-            <small>Read a letter aloud when it is picked up</small>
+            <strong>Say the word</strong>
+            <small>Read each new word out as it appears</small>
           </span>
         </label>
       </li>
@@ -333,17 +335,17 @@
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           <span class="switch-text">
             <strong>Read out meanings</strong>
-            <small>Say what a word means when it is found</small>
+            <small>Say what the word means as well as the word</small>
           </span>
         </label>
       </li>
       <li class="setting">
         <label class="switch">
-          <input type="checkbox" id="setWordGlow" checked>
+          <input type="checkbox" id="setLetterHelper" checked>
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           <span class="switch-text">
-            <strong>Glow on real words</strong>
-            <small>Light up the Check button when the word is right</small>
+            <strong>Letter helper</strong>
+            <small>Show the ball-and-stick shape under b d p q n m</small>
           </span>
         </label>
       </li>
@@ -395,8 +397,8 @@
 <script src="js/sound.js"></script>
 <script src="js/confetti.js"></script>
 <script src="js/kitten.js"></script>
-<script src="js/grid.js"></script>
 <script src="js/dragdrop.js"></script>
-<script src="js/game.js"></script>
+<script src="js/puzzle.js"></script>
+<script src="js/missing.js"></script>
 </body>
 </html>
