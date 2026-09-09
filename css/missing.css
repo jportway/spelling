@@ -496,7 +496,12 @@
    The reward
    -------------------------------------------------------------------------- */
 
-.overlay-reward { padding: 12px; }
+.overlay-reward {
+  padding: 12px;
+  /* Last line of defence: whatever the shape of the screen, the Done button
+     must always be reachable. */
+  overflow-y: auto;
+}
 
 .reward-panel {
   width: min(100%, 900px);
@@ -529,10 +534,23 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  /* Never taller than the screen it has to sit in, title and button and all. */
+  max-height: 62vh;
   border-radius: var(--radius-lg);
   overflow: hidden;
   background: #000;
   box-shadow: var(--shadow-soft);
+}
+
+/* A Short is filmed portrait. Driving the height and letting the width follow
+   keeps it filling the screen it was shot for instead of sitting in a
+   letterbox with black either side of it. */
+.reward-frame.is-tall {
+  aspect-ratio: 9 / 16;
+  width: auto;
+  height: min(66vh, 560px);
+  max-height: 66vh;
+  margin: 0 auto;
 }
 
 .reward-frame iframe {
@@ -565,6 +583,18 @@
 .party-balloons span:nth-child(3) { animation-delay: -.8s; }
 .party-balloons span:nth-child(4) { animation-delay: -1.2s; }
 .party-balloons span:nth-child(5) { animation-delay: -1.6s; }
+
+/* A phone held sideways has almost no height to play with, and a portrait
+   video eats what there is. Shrink the trimmings so the video and the way out
+   both still fit. */
+@media (max-height: 520px) {
+  .reward-title { font-size: clamp(22px, 7vmin, 40px); }
+  .reward-sub { font-size: clamp(11px, 2.4vmin, 14px); }
+  .reward-panel { gap: 8px; }
+  .reward-frame { max-height: 52vh; }
+  .reward-frame.is-tall { height: min(52vh, 560px); }
+  .party-balloons { font-size: clamp(28px, 9vmin, 54px); }
+}
 
 @keyframes party-float {
   50% { transform: translateY(-14px) rotate(6deg); }

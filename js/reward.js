@@ -25,20 +25,39 @@
      ---------------------------------------------------------------------- */
 
   /* Videos you have picked. Just the id - the part of a YouTube link after
-     "v=" or after "youtu.be/". One per line. When this list has anything in
-     it at all, it is used and the channel below is ignored.
+     "v=", after "youtu.be/", or after "/shorts/". When this list has anything
+     in it at all, it is used and the channel below is ignored.
+
+     Paste the whole link if that is easier - a /shorts/, watch or youtu.be
+     address all work, tracking parameters and all.
+
+     Shorts are filmed portrait, and a /shorts/ link is taken as portrait
+     without being told. Anything else follows VIDEOS_ARE_TALL below; add
+     " wide" or " tall" after an entry to settle it either way. Getting it
+     right means the player is shaped to the video instead of sitting in a
+     letterbox of black.
 
        var VIDEOS = [
-         "dQw4w9WgXcQ",
-         "aAkMkVFwAoo"
+         "https://youtube.com/shorts/aAkMkVFwAoo",
+         "dQw4w9WgXcQ wide"       // an ordinary landscape video
        ]; */
-  var VIDEOS = [];
+  var VIDEOS = [
+    "https://youtube.com/shorts/DyKsA5RXNs0",
+    "https://youtube.com/shorts/bWWy7TA-ivs",
+    "https://youtube.com/shorts/Yh0MZ_W2lgc",
+    "https://youtube.com/shorts/YLeFvTfVFvE",
+    "https://youtube.com/shorts/SQDgzI5eHCU"
+  ];
+
+  /* Flip this if your list turns out to be mostly ordinary videos instead;
+     then " tall" marks the exceptions. */
+  var VIDEOS_ARE_TALL = true;
 
   /* Otherwise, a random video from this channel. Needs the real channel id,
      which starts "UC" - the @name or /c/name in the address bar is not it.
      To find it: open the channel, view source, and search for "channelId".
      Leave it empty and the balloon bursts into a party instead. */
-  var CHANNEL_ID = "";
+  var CHANNEL_ID = "UC9qgVkKRZUXcgHdf35Z-8dw";   // My Little Pony
 
   /* How long to wait for YouTube before giving up and throwing the party.
      She has just popped a balloon; she is not going to sit through a spinner. */
@@ -53,6 +72,29 @@
   var patience = null;
   var partyTimer = null;
 
+  /* A whole link is what you have in your hand after tapping Share, so a
+     whole link is accepted - shorts, watch and youtu.be forms alike, tracking
+     parameters and all. A bare id works too.
+
+       "https://youtube.com/shorts/abc?si=x"  -> { id: "abc", tall: true }
+       "abc123 wide"                          -> { id: "abc123", tall: false } */
+  var ID_IN_URL = /(?:\/shorts\/|[?&]v=|youtu\.be\/|\/embed\/)([A-Za-z0-9_-]{11})/;
+
+  function parseEntry(raw) {
+    var bits = String(raw).trim().split(/\s+/);
+    var flags = bits.slice(1).join(" ").toLowerCase();
+
+    var found = ID_IN_URL.exec(bits[0]);
+    var id = found ? found[1] : bits[0];
+
+    // A /shorts/ link says what shape it is without being asked.
+    var tall = bits[0].indexOf("/shorts/") !== -1 ? true : VIDEOS_ARE_TALL;
+    if (flags.indexOf("wide") !== -1) tall = false;
+    if (flags.indexOf("tall") !== -1) tall = true;
+
+    return { id: id, tall: tall };
+  }
+
   function videoUrl() {
     var params =
       "?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=0&disablekb=1" +
@@ -60,8 +102,11 @@
       encodeURIComponent(global.location.origin);
 
     if (VIDEOS.length) {
-      var id = VIDEOS[(Math.random() * VIDEOS.length) | 0];
-      return "https://www.youtube-nocookie.com/embed/" + id + params;
+      var pick = parseEntry(VIDEOS[(Math.random() * VIDEOS.length) | 0]);
+      return {
+        url: "https://www.youtube-nocookie.com/embed/" + pick.id + params,
+        tall: pick.tall
+      };
     }
 
     if (/^UC[\w-]{20,24}$/.test(CHANNEL_ID)) {
@@ -69,19 +114,31 @@
       // id with UC swapped for UU. Picking an index into it gets a different
       // video each time without asking YouTube anything first.
       var uploads = "UU" + CHANNEL_ID.slice(2);
-      var index = (Math.random() * 40) | 0;
-      return "https://www.youtube-nocookie.com/embed/videoseries" + params +
-             "&list=" + uploads + "&index=" + index;
+      // A playlist embed only reaches so far back, so this draws from the
+      // channel's recent uploads rather than its whole history - which is
+      // another reason the hand-picked list above is the better option.
+      var index = (Math.random() * 50) | 0;
+      return {
+        // A channel's uploads are a mix of both shapes and there is no way to
+        // know which turns up, so the safe assumption is the ordinary one.
+        url: "https://www.youtube-nocookie.com/embed/videoseries" + params +
+             "&list=" + uploads + "&index=" + index,
+        tall: false
+      };
     }
 
-    return "";
+    return null;
   }
 
   /* No video, or no way to reach it. She still gets a moment. */
   function party() {
-    if (dom.video) dom.video.innerHTML = "";
+    // Emptied, not merely hidden. A hidden iframe is still a live one, and a
+    // video that arrives late would sit under the party talking to itself.
+    if (dom.frame) {
+      dom.frame.innerHTML = "";
+      dom.frame.hidden = true;
+    }
     if (dom.party) dom.party.hidden = false;
-    if (dom.frame) dom.frame.hidden = true;
 
     global.Confetti.celebrate();
     global.Kitten.react("bigcheer");
@@ -139,17 +196,20 @@
     global.setTimeout(function () { finish(false); }, PATIENCE_MS);
   }
 
-  function playVideo(url) {
+  function playVideo(choice) {
     dom.party.hidden = true;
     dom.frame.hidden = false;
     dom.frame.innerHTML = "";
+    // Portrait for a Short, landscape for anything else. Getting this wrong
+    // does not break it, it just wastes most of the screen on black.
+    dom.frame.classList.toggle("is-tall", !!choice.tall);
 
     var frame = document.createElement("iframe");
     frame.className = "reward-frame";
     frame.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture");
     frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
     frame.setAttribute("title", "Your reward video");
-    frame.src = url;
+    frame.src = choice.url;
     dom.frame.appendChild(frame);
 
     patience = global.setTimeout(function () { settle(false); }, PATIENCE_MS);
@@ -194,9 +254,9 @@
 
       dom.screen.classList.add("is-open");
 
-      var url = this.enabled ? videoUrl() : "";
-      if (url) {
-        playVideo(url);
+      var choice = this.enabled ? videoUrl() : null;
+      if (choice) {
+        playVideo(choice);
       } else {
         settle(true);
         party();

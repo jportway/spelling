@@ -177,18 +177,36 @@ balloon's size was calibrated.
 
 The round ends the moment it bursts, and she gets a My Little Pony video.
 
-Both knobs are at the top of [`js/reward.js`](js/reward.js). Fill in `VIDEOS`
-with ids of videos you have watched yourself and it plays one of those.
-Otherwise set `CHANNEL_ID` to a channel's real id — the one starting `UC`, not
-the `@name` in the address bar — and it picks at random from that channel's
-uploads. No API key is involved either way, so there is no secret to leak out
-of a public repository.
+Both knobs are at the top of [`js/reward.js`](js/reward.js). `CHANNEL_ID` is
+already set to the My Little Pony channel, so out of the box it picks at
+random from that channel's recent uploads. No API key is involved, so there
+is no secret to leak out of a public repository.
 
-Two things worth knowing about the channel route: a random pick from a whole
-back catalogue is sometimes an advert or a two-hour compilation, and an
-embedded player has end-screen cards that cannot be fully suppressed. It is
+Better, fill in `VIDEOS` with ids of videos you have watched yourself — the
+bit of the link after `v=`, after `youtu.be/`, or after `/shorts/`. The list
+wins over the channel whenever it has anything in it, so both can sit there
+and the channel becomes the fallback.
+
+```js
+var VIDEOS = [
+  "aAkMkVFwAoo",        // a Short, portrait
+  "dQw4w9WgXcQ wide"    // an ordinary landscape video
+];
+```
+
+**Shorts are filmed portrait**, and entries are treated as portrait unless
+they say `wide`, so the player is reshaped to a phone-sized panel rather than
+sitting in a letterbox with black either side. Flip `VIDEOS_ARE_TALL` if your
+list turns out to be mostly ordinary videos instead, and then `tall` marks the
+exceptions. The channel route always assumes landscape, since a channel's
+uploads are a mix and there is no way to know in advance which turns up.
+
+Three things worth knowing about the channel route: a playlist embed only
+reaches back so far, so it draws from recent uploads rather than the whole
+history; a random pick is sometimes an advert or a two-hour compilation; and
+an embedded player has end-screen cards that cannot be fully suppressed. It is
 fine with someone in the room; it is not a walled garden. The curated list
-avoids both, which is probably where you end up.
+avoids all three, which is probably where you end up.
 
 **With neither set — which is how this ships — the balloon bursts into a
 full-screen party instead**, and the game stays entirely offline. That is also
