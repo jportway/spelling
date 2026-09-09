@@ -5,6 +5,15 @@
    drags the letter that belongs in the hole. The right one locks in and goes
    green; the wrong one tips over and falls back into the pile.
 
+   The round is: fill the balloon before the clock runs out. That shape is
+   deliberate. Scoring by how many words she got through rewarded rushing,
+   and since the pile nearly always holds the answer next to the letter it is
+   muddled with, guessing was a coin flip that paid out half the time and
+   cost nothing. Now there is no "more" to earn by going faster - the balloon
+   needs what it needs - and every wrong letter lets air out of the word she
+   is on before it is banked. Taking her time is not merely better; it is the
+   only way to reach the pop.
+
    Most of the time the hole wants one of b, d, p, q, n or m, and most of the
    time the letter it is muddled with is sitting right there in the pile — so
    the game keeps asking the one question that is actually hard, over and
@@ -18,17 +27,22 @@
   var NAMES = [PLAYER, "Meeps", "Meepsie"];
   var NAME_CHANCE = 0.45;
 
-  /* Points by word length, plus what she earns for the hard parts. Getting
-     it first go is worth as much as two extra letters: this game is about
-     stopping to look, not about speed. */
-  var POINTS = [0, 0, 0, 10, 14, 20, 28, 38, 50];
-  var TRICKY_BONUS = 8;
-  var CLEAN_BONUS = 10;
+  /* What a word is worth in puffs of air: longer words and tricky holes are
+     worth more, and the pile of them sits beside the word so she can see the
+     stake before she touches anything. */
+  var PUFF_BASE = 2;
+  var PUFF_PER_TRICKY = 1;
+
+  /* How much a balloon holds, per minute of play. Set so that answering
+     carefully fills it with time to spare and guessing does not get there -
+     see the two simulated players in the tests, which is where this number
+     came from and where it should be re-checked if anything else changes. */
+  var PUFFS_PER_MINUTE = 23;
 
   /* How long the finished word stays up before the next one, in
      milliseconds. Long enough to enjoy, short enough not to lose her. */
-  var ADVANCE_MS = 1750;
-  var ADVANCE_BIG_MS = 2200;
+  var ADVANCE_MS = 900;
+  var ADVANCE_BIG_MS = 1200;
 
   /* How long the wrong letter sits in the hole before it falls out. Dragging
      is off for exactly this long, so a tile cannot be grabbed halfway
@@ -50,10 +64,14 @@
     "What a word!"
   ];
 
-  var STORE_KEY = "missingletters.v1";
+  /* v2: the old best scores were points and are not comparable to a
+     balloon, so they are left behind rather than sat at the top of the
+     screen being meaningless. */
+  var STORE_KEY = "missingletters.v2";
   var SETTINGS_KEY = "cooper.settings.v1";
 
   var DEFAULT_SETTINGS = {
+    rewardVideo: true,
     autoSay: true,
     speakDefinitions: true,
     letterHelper: true,
@@ -64,14 +82,18 @@
 
   var dom = {};
   var settings = Object.assign({}, DEFAULT_SETTINGS);
-  var records = { best: 0, collection: [] };
+  /* best is the fullest balloon she has ever got, as a percentage; pops is
+     how many she has burst, ever. */
+  var records = { best: 0, pops: 0, collection: [] };
 
   var state = {
     running: false,
     paused: false,
     minutes: 5,
     secondsLeft: 0,
-    score: 0,
+    banked: 0,       // puffs in the balloon
+    puffs: 0,        // what the word in front of her is worth right now
+    popped: false,
 
     level: 0,        // 0-5, see puzzle.js
     cleanRun: 0,     // consecutive first-go answers, for the ladder
@@ -103,6 +125,7 @@
       var saved = JSON.parse(global.localStorage.getItem(STORE_KEY) || "{}");
       if (saved.records) {
         records.best = saved.records.best || 0;
+        records.pops = saved.records.pops || 0;
         records.collection = saved.records.collection || [];
       }
       // Settings are shared with the word game, so the sound switch is the
@@ -339,6 +362,106 @@
     applyLetterHelper();
   }
 
+  /* What this word is worth if she gets it right from here. */
+  function puffValue(word, holes) {
+    var value = PUFF_BASE + Math.max(0, word.length - 3);
+    for (var i = 0; i < holes.length; i++) {
+      if (global.Letters.isTricky(word[holes[i]])) value += PUFF_PER_TRICKY;
+    }
+    return value;
+  }
+
+  /* Draw the stake. Called once when the word appears and again each time a
+     wrong letter costs her one, so the pile only ever shrinks in front of
+     her - which is the whole point of showing it. */
+  function renderPuffs(lost) {
+    dom.puffs.innerHTML = "";
+
+    for (var i = 0; i < state.puffs; i++) {
+      var puff = document.createElement("span");
+      puff.className = "puff" + (lost ? "" : " is-new");
+      puff.style.animationDelay = (i * 45) + "ms";
+      dom.puffs.appendChild(puff);
+    }
+
+    // The one that just went, kept on screen long enough to be seen going.
+    if (lost) {
+      var gone = document.createElement("span");
+      gone.className = "puff is-lost";
+      dom.puffs.appendChild(gone);
+      global.setTimeout(function () {
+        if (gone.parentElement) gone.parentElement.removeChild(gone);
+      }, 450);
+    }
+
+    dom.puffs.setAttribute("aria-label",
+      "This word is worth " + state.puffs +
+      (state.puffs === 1 ? " puff" : " puffs"));
+  }
+
+  /* Send them up to the balloon one at a time. The stagger matters: the
+     balloon visibly grows in steps and the puff sound climbs with it, which
+     is far better than one silent jump. */
+  function flyPuffsToBalloon(then) {
+    var target = global.Balloon.element();
+    var flying = dom.puffs.querySelectorAll(".puff:not(.is-lost)");
+
+    if (!target || !flying.length) {
+      then(false);
+      return;
+    }
+
+    var box = target.getBoundingClientRect();
+    var landed = 0;
+    var total = flying.length;
+    var settled = false;
+
+    // Once it bursts the round is over, so the rest of the puffs land into
+    // nothing and must not call back a second time.
+    function finish(burst) {
+      if (settled) return;
+      settled = true;
+      then(burst);
+    }
+
+    for (var i = 0; i < total; i++) {
+      (function (source, delay) {
+        var from = source.getBoundingClientRect();
+        source.style.visibility = "hidden";
+
+        var ghost = document.createElement("span");
+        ghost.className = "puff puff-flight";
+        ghost.style.left = from.left + "px";
+        ghost.style.top = from.top + "px";
+        ghost.style.width = from.width + "px";
+        ghost.style.height = from.height + "px";
+        document.body.appendChild(ghost);
+
+        global.setTimeout(function () {
+          ghost.style.transform =
+            "translate(" + (box.left + box.width / 2 - from.left - from.width / 2) +
+            "px," + (box.top + box.height * 0.55 - from.top - from.height / 2) +
+            "px) scale(.45)";
+          ghost.style.opacity = "0.15";
+        }, delay + 20);
+
+        global.setTimeout(function () {
+          if (ghost.parentElement) ghost.parentElement.removeChild(ghost);
+
+          // Each puff inflates the balloon as it arrives.
+          var burst = global.Balloon.add(1);
+          global.Sound.inflate(global.Balloon.fill());
+          if (!burst && global.Balloon.fill() >= 0.8) {
+            global.Sound.creak(global.Balloon.fill());
+          }
+
+          if (burst) finish(true);
+          else if (++landed >= total) finish(false);
+        }, delay + 560);
+      })(flying[i], i * 110);
+    }
+  }
+
   function openHoles() {
     var open = [];
     for (var i = 0; i < state.holes.length; i++) {
@@ -521,6 +644,14 @@
   function rejectDrop(item, hole) {
     state.misses++;
 
+    // Air out of the word, before any of it is banked. Halving makes the
+    // first mistake the expensive one, which is exactly where the thinking
+    // has to happen; the floor of one means finishing always counts for
+    // something, however many goes it took.
+    var before = state.puffs;
+    state.puffs = Math.max(1, Math.ceil(state.puffs / 2));
+    renderPuffs(state.puffs < before);
+
     // Show it sitting in the hole first: she needs to see the letter she
     // actually chose, in place, before it goes anywhere.
     hole.el.appendChild(item.el);
@@ -560,7 +691,12 @@
       return;
     }
 
-    if (item.letter === hole.letter) lockIn(item, hole, ghostRect);
+    var correct = item.letter === hole.letter;
+    // hole.at is the position in the word, so a word with two letters out
+    // records which of them she was filling.
+    global.Logbook.attempt({ hole: hole.at, letter: item.letter });
+
+    if (correct) lockIn(item, hole, ghostRect);
     else rejectDrop(item, hole);
   }
 
@@ -572,13 +708,6 @@
     var cheer = pick(big ? BIG_PRAISE : PRAISE);
     if (Math.random() > NAME_CHANCE) return cheer;
     return cheer.replace(/[!.]+$/, "") + ", " + pick(NAMES) + "!";
-  }
-
-  function updateScore() {
-    dom.scoreValue.textContent = state.score;
-    dom.scoreValue.classList.remove("is-bumped");
-    void dom.scoreValue.offsetWidth;
-    dom.scoreValue.classList.add("is-bumped");
   }
 
   function addSolvedChip(word, points) {
@@ -616,13 +745,12 @@
       if (global.Letters.isTricky(word[puzzle.holes[i]])) tricky++;
     }
 
-    var points = (POINTS[word.length] || POINTS[POINTS.length - 1]) +
-                 tricky * TRICKY_BONUS + (clean ? CLEAN_BONUS : 0);
-
-    state.score += points;
+    var puffs = state.puffs;
+    global.Logbook.endWord({ solved: true, puffs: puffs });
+    state.banked += puffs;
     state.trickyFixed += tricky;
     if (clean) state.firstTime++;
-    state.solved.unshift({ word: word, points: points, clean: clean });
+    state.solved.unshift({ word: word, points: puffs, clean: clean });
     if (records.collection.indexOf(word) === -1) records.collection.push(word);
 
     // The ladder. Two clean answers in a row and the words get longer and
@@ -644,7 +772,8 @@
     clearHints();
 
     showMessage(
-      praise + " <strong>" + word + "</strong> <span class=\"pts\">+" + points + "</span>" +
+      praise + " <strong>" + word + "</strong> <span class=\"pts\">+" + puffs +
+      (puffs === 1 ? " puff" : " puffs") + "</span>" +
       (clean ? " &nbsp;<em>first go!</em>" : ""),
       "good"
     );
@@ -657,19 +786,25 @@
       { text: word, rate: 0.82, pitch: 1.1 }
     ]);
 
-    updateScore();
-    addSolvedChip(word, points);
+    addSolvedChip(word, puffs);
 
+    // The puffs fly up and blow it out one at a time. If the last of them is
+    // the one that bursts it, the round is over and the balloon's own pop
+    // callback takes it from here.
     global.clearTimeout(state.advance);
-    state.advance = global.setTimeout(function () {
-      nextPuzzle(null);
-    }, big ? ADVANCE_BIG_MS : ADVANCE_MS);
+    flyPuffsToBalloon(function (burst) {
+      if (burst || !state.running) return;
+      state.advance = global.setTimeout(function () {
+        nextPuzzle(null);
+      }, big ? ADVANCE_BIG_MS : ADVANCE_MS);
+    });
   }
 
   function skipWord() {
     if (!state.running || state.paused || !state.puzzle) return;
 
     var word = state.puzzle.word;
+    global.Logbook.endWord({ solved: false, skipped: true, puffs: 0 });
     state.cleanRun = 0;
     state.level = Math.max(state.level - 1, 0);
 
@@ -734,6 +869,14 @@
     state.used.add(puzzle.word);
     state.misses = 0;
     state.picked = 0;
+    state.puffs = puffValue(puzzle.word, puzzle.holes);
+    renderPuffs(false);
+    global.Logbook.word({
+      word: puzzle.word,
+      grade: global.Dictionary.grade(puzzle.word),
+      level: state.level,
+      holes: puzzle.holes
+    });
 
     dom.wordLine.classList.remove("is-solved", "is-wrapped");
     clearMessage();
@@ -788,7 +931,9 @@
   function startRound() {
     state.running = true;
     state.paused = false;
-    state.score = 0;
+    state.banked = 0;
+    state.puffs = 0;
+    state.popped = false;
     state.level = 0;
     state.cleanRun = 0;
     state.solved = [];
@@ -800,8 +945,13 @@
 
     dom.foundList.innerHTML = "";
     dom.foundCount.textContent = "0";
-    dom.scoreValue.textContent = "0";
+    dom.puffs.innerHTML = "";
     dom.app.classList.remove("is-paused");
+
+    // Bigger balloon for a longer round, so the target stays roughly the
+    // same distance away whichever length she picks.
+    global.Balloon.reset(state.minutes * PUFFS_PER_MINUTE);
+    global.Logbook.startRound({ minutes: state.minutes });
 
     global.Kitten.reset();
     paintClock();
@@ -809,6 +959,48 @@
     global.Sound.start();
 
     nextPuzzle(null);
+  }
+
+  function logRoundEnd() {
+    global.Logbook.endRound({
+      words: state.solved.length,
+      firstGo: state.firstTime,
+      tricky: state.trickyFixed,
+      fill: global.Balloon.percent(),
+      popped: state.popped
+    });
+  }
+
+  function rememberBest() {
+    var fill = global.Balloon.percent();
+    if (fill > records.best) records.best = fill;
+  }
+
+  /* She filled it. The round is over the moment it goes: everything is saved
+     before the video starts, so closing the tab halfway through a pony
+     cannot cost her the balloon she just earned. */
+  function burstRound() {
+    if (!state.running) return;
+
+    state.running = false;
+    state.popped = true;
+    stopClock();
+    global.clearTimeout(state.advance);
+    finishSettle();
+    global.Speech.stop();
+
+    records.pops++;
+    rememberBest();
+    saveStore();
+    logRoundEnd();
+
+    global.Sound.pop();
+    global.Kitten.react("bigcheer");
+    global.Confetti.celebrate();
+
+    global.Reward.show(function () {
+      showResults(false);
+    });
   }
 
   function pauseRound() {
@@ -845,8 +1037,12 @@
 
     if (!quit) global.Sound.timeUp();
 
-    if (state.score > records.best) records.best = state.score;
+    // A balloon still in one piece is not a failure, it is a high-water mark
+    // to beat next time.
+    global.Balloon.cancel();
+    rememberBest();
     saveStore();
+    logRoundEnd();
 
     showResults(quit);
   }
@@ -906,17 +1102,19 @@
   }
 
   function showResults(quit) {
-    dom.endTitle.textContent = quit
-      ? "Round finished, " + PLAYER
-      : "Time's up, " + PLAYER + "!";
-    dom.endScore.textContent = state.score;
+    dom.endTitle.textContent = state.popped
+      ? "POP!"
+      : (quit ? "Round finished, " + PLAYER : "Time's up, " + PLAYER + "!");
+    dom.endScore.textContent = global.Balloon.percent() + "%";
     dom.endWords.textContent = state.solved.length;
     dom.endFirstTime.textContent = state.firstTime;
     dom.endTricky.textContent = state.trickyFixed;
 
     var note;
-    if (state.score >= records.best && state.score > 0) {
-      note = "A new best score, " + PLAYER + "! 🏆";
+    if (state.popped) {
+      note = "You popped it, " + PLAYER + "! 🎈";
+    } else if (global.Balloon.percent() >= records.best && global.Balloon.percent() > 0) {
+      note = "The biggest you have ever got it. 🏆";
     } else if (state.solved.length && state.firstTime === state.solved.length) {
       note = "Every single one first go. That is properly good.";
     } else if (state.trickyFixed >= 6) {
@@ -991,6 +1189,7 @@
   // ------------------------------------------------------------------------
 
   var SETTING_INPUTS = {
+    rewardVideo: "setRewardVideo",
     autoSay: "setAutoSay",
     speakDefinitions: "setSpeakDefinitions",
     letterHelper: "setLetterHelper",
@@ -1001,10 +1200,30 @@
 
   function applySettings() {
     global.Sound.enabled = settings.sound;
+    global.Reward.enabled = settings.rewardVideo;
     global.Kitten.setEnabled(settings.kitten);
     global.Confetti.calm = settings.calm;
     document.body.classList.toggle("calm", settings.calm);
     applyLetterHelper();
+  }
+
+  function refreshLogbook() {
+    dom.logbookCount.textContent = global.Logbook.pending();
+  }
+
+  function wireLogbook() {
+    dom.logbookEndpoint.value = global.Logbook.endpoint();
+
+    dom.logbookEndpoint.addEventListener("change", function () {
+      var url = dom.logbookEndpoint.value.trim();
+      global.Logbook.endpoint(url);
+      if (url) global.Logbook.flush();
+      refreshLogbook();
+    });
+
+    dom.logbookExportBtn.addEventListener("click", function () {
+      global.Logbook.download();
+    });
   }
 
   function wireSettings() {
@@ -1185,6 +1404,7 @@
       openOverlay(dom.helpScreen);
     });
     dom.startSettingsBtn.addEventListener("click", function () {
+      refreshLogbook();
       openOverlay(dom.settingsScreen);
     });
     dom.helpCloseBtn.addEventListener("click", function () {
@@ -1193,6 +1413,7 @@
 
     dom.settingsBtn.addEventListener("click", function () {
       if (state.running && !state.paused) pauseRound();
+      refreshLogbook();
       openOverlay(dom.settingsScreen);
     });
     dom.settingsCloseBtn.addEventListener("click", function () {
@@ -1223,8 +1444,8 @@
   }
 
   function refreshRecords() {
-    dom.bestScore.textContent = records.best;
-    dom.collectionCount.textContent = records.collection.length;
+    dom.bestScore.textContent = records.best + "%";
+    dom.collectionCount.textContent = records.pops;
   }
 
   // ------------------------------------------------------------------------
@@ -1234,7 +1455,9 @@
   function collectDom() {
     [
       "app", "pool", "wordLine", "message", "sayWordBtn", "sayMeaningBtn",
-      "skipBtn", "foundList", "foundCount", "scoreValue", "timer",
+      "skipBtn", "foundList", "foundCount", "balloon", "balloonLabel",
+      "puffs", "rewardScreen", "rewardFrame", "rewardParty", "rewardDoneBtn",
+      "timer",
       "timerText", "timerFill", "pauseBtn", "helpBtn", "settingsBtn",
       "startScreen", "startBody", "loadingRow", "playBtn", "durationChips",
       "bestScore", "collectionCount", "startHelpBtn", "startSettingsBtn",
@@ -1242,7 +1465,7 @@
       "endScore", "endWords", "endFirstTime", "endTricky", "endNote",
       "wobblyBlock", "wobblyList", "missedBlock", "missedList", "againBtn",
       "homeBtn", "helpScreen", "helpCards", "helpCloseBtn", "settingsScreen",
-      "settingsCloseBtn"
+      "settingsCloseBtn", "logbookCount", "logbookEndpoint", "logbookExportBtn"
     ].forEach(function (id) {
       dom[id] = byId(id);
     });
@@ -1277,10 +1500,23 @@
     collectDom();
     loadStore();
 
+    global.Logbook.init();
     global.Confetti.init(byId("confetti"));
     global.Kitten.init(byId("kitten"));
+    global.Balloon.init({
+      element: dom.balloon,
+      label: dom.balloonLabel,
+      onPop: burstRound
+    });
+    global.Reward.init({
+      screen: dom.rewardScreen,
+      frame: dom.rewardFrame,
+      party: dom.rewardParty,
+      doneBtn: dom.rewardDoneBtn
+    });
 
     wireSettings();
+    wireLogbook();
     wireButtons();
     wireDragDrop();
     buildHelpCards();
@@ -1312,7 +1548,11 @@
     level: function () { return state.level; },
     misses: function () { return state.misses; },
     solvedCount: function () { return state.solved.length; },
-    score: function () { return state.score; }
+    score: function () { return state.banked; },
+    puffs: function () { return state.puffs; },
+    fill: function () { return global.Balloon.fill(); },
+    popped: function () { return state.popped; },
+    capacity: function () { return global.Balloon.capacity(); }
   };
 
   if (document.readyState === "loading") {

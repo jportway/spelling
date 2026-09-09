@@ -133,15 +133,126 @@ Six levels, from three-letter everyday words up to eight-letter ones with two
 holes. Two clean answers in a row moves her up a rung; a word that took a
 couple of goes moves her back down. She should be working, never drowning.
 
-Points go by word length, plus a bonus for each tricky letter and another for
-getting it first go — being right first time is worth as much as two extra
-letters, because this game is about stopping to look rather than being quick.
+### The balloon
+
+There is no score. The round is: **fill the balloon before the clock runs
+out**, and popping it plays a video.
+
+That shape is deliberate, and it replaced a points total that was quietly
+teaching the wrong lesson. Points came from words completed, so going faster
+was worth more — and because the pile nearly always holds the answer beside
+the letter it is muddled with, guessing was a coin flip that paid out half the
+time and cost almost nothing. The best way to play was to stop thinking.
+
+Now there is no "more" to earn by hurrying. The balloon needs what it needs.
+
+Every word is worth a few **puffs of air**, shown as a little pile beside it
+so the stake is visible before she touches anything — longer words and tricky
+holes are worth more. Every wrong letter halves what is left, with a floor of
+one so finishing always counts:
+
+```
+worth 5  →  miss  →  3  →  miss  →  2  →  miss  →  1  →  1
+```
+
+Finish the word and the remaining puffs fly up and blow the balloon out, one
+at a time. It stretches, the rubber goes pale and thin, and past four fifths
+full it starts trembling and creaking, so she can see and hear the pop coming.
+Nothing ever deflates — air already banked is hers.
+
+The numbers, measured by playing the real game three ways for a few minutes
+each and projecting to a five-minute round:
+
+| how she plays | puffs a second | to fill the balloon |
+| ------------- | -------------- | ------------------- |
+| stops and looks | 0.68 | **170s** — 57% of the round |
+| stops and looks, but misses one in four | 0.56 | **205s** — 68% |
+| taps until something sticks | 0.18 | **656s** — twice the clock |
+
+Careful play is not merely better any more. It is the only thing that gets
+there. The two simulated players live in the test suite, and that is where the
+balloon's size was calibrated.
+
+### The pop
+
+The round ends the moment it bursts, and she gets a My Little Pony video.
+
+Both knobs are at the top of [`js/reward.js`](js/reward.js). Fill in `VIDEOS`
+with ids of videos you have watched yourself and it plays one of those.
+Otherwise set `CHANNEL_ID` to a channel's real id — the one starting `UC`, not
+the `@name` in the address bar — and it picks at random from that channel's
+uploads. No API key is involved either way, so there is no secret to leak out
+of a public repository.
+
+Two things worth knowing about the channel route: a random pick from a whole
+back catalogue is sometimes an advert or a two-hour compilation, and an
+embedded player has end-screen cards that cannot be fully suppressed. It is
+fine with someone in the room; it is not a walled garden. The curated list
+avoids both, which is probably where you end up.
+
+**With neither set — which is how this ships — the balloon bursts into a
+full-screen party instead**, and the game stays entirely offline. That is also
+what happens with no connection, or if the video will not load within six
+seconds. This is the only part of either game that touches the network, and
+nothing is fetched until the balloon actually goes.
 
 ### Afterwards
 
 The results screen has a **Still a bit wobbly** panel listing the pairs that
 went wrong and how often. That one is really for whoever is sitting next to
 her. Tapping a pair reads out how to tell the two apart.
+
+## The practice log
+
+Every word she is given and every letter she tries is written down, so the
+thing worth knowing — is b-for-d getting rarer, is she getting quicker at
+deciding — can actually be looked at rather than guessed.
+
+One record per word:
+
+```json
+{ "w": "bandit", "h": [0, 3], "g": 1, "lv": 2,
+  "tries": [ { "hole": 3, "got": "p", "ms": 616 },
+             { "hole": 3, "got": "d", "ms": 900 },
+             { "hole": 0, "got": "b", "ms": 899 } ],
+  "solved": true, "puffs": 2 }
+```
+
+`hole` is the position in the word, not which gap it was in the queue, so a
+word with two letters missing says exactly which one she was filling. `ms` is
+how long she took over that particular choice.
+
+**It is deliberately raw.** Whether an attempt was right, and whether a wrong
+one was the b/d muddle rather than something else, are both worked out when
+the log is *read* — they are `got === w[hole]` and a glance at the pair.
+Writing "this was a b/d error" into the record would bake in an opinion about
+what counts as a mistake and quietly hide any pattern that opinion did not
+anticipate.
+
+### Where it goes
+
+**localStorage first, and always.** The queue on her iPad is the real copy;
+uploading drains it. That is what makes a tablet on a train behave exactly
+like one at home, and it means logging works today with nothing set up at all.
+Records only leave the queue once a server has actually acknowledged them, so
+a failed upload costs a retry and nothing else.
+
+Under **Settings → Practice log** there is a box for an upload address and a
+button that downloads the lot as JSON. With no address set, the download is
+the whole mechanism.
+
+If you want it uploading, a **Google Apps Script web app writing to a Sheet**
+is the easiest thing that works: no server, no API key, free, and it lands
+directly in the thing you want to chart. The one gotcha is baked into the
+code already — the upload posts as `text/plain`, because anything else
+triggers a CORS preflight that Apps Script's redirect will not survive.
+
+**The address is not in this repository, on purpose.** The site is public, so
+a URL committed here would be an open endpoint for anyone who found it. It is
+typed into Settings once, on her iPad, and lives only in that browser.
+
+Nothing in the log identifies a person: a random id for the device, and no
+name.
 
 ## How they help with b, d, p, q, n and m
 
@@ -206,8 +317,8 @@ ADHD.
 - **The clock is a quiet ring**, not a red countdown.
 
 Settings (from either start screen or the cog) turn off the letter diagrams,
-letter-reading, spoken meanings, the "this is a real word" glow, sound, and a
-calm mode that tones down the celebrations. Calm mode switches itself on if
+letter-reading, spoken meanings, the "this is a real word" glow, the reward
+video, sound, and a calm mode that tones down the celebrations. Calm mode switches itself on if
 the device asks for reduced motion. **The settings are shared between the two
 games** — the sound switch is the same switch on both pages — while each game
 keeps its own best score. Both live in the browser.
@@ -326,6 +437,9 @@ js/confetti.js          the reward
 js/kitten.js            the cat: reactions and picking between them
 js/game.js              the word game's round
 js/puzzle.js            choosing a word, a hole and a pile of letters
+js/balloon.js           the balloon: how full, how strained, and the pop
+js/reward.js            what happens when it bursts
+js/logbook.js           what she did, kept locally and uploaded if you like
 js/missing.js           the missing-letters round
 data/words.js           generated — the word list and its grades, loaded first
 data/definitions.js     generated — the meanings, loaded in the background

@@ -1905,6 +1905,356 @@ button {
     animation: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   The balloon
+
+   It sits where the points total used to be, because it *is* the score now.
+   Two things carry the feeling: it grows, and it starts to look like it is
+   in trouble. The second one is what a progress bar can never do.
+   -------------------------------------------------------------------------- */
+
+.game-missing {
+  --balloon-skin: #ff5470;
+  --balloon-stretch: #ffc9d4;
+}
+
+.hud-balloon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+}
+
+.balloon {
+  --fill: 0;
+  width: clamp(54px, 12.5vmin, 88px);
+  height: clamp(70px, 16.5vmin, 112px);
+  display: grid;
+  place-items: center;
+}
+
+.balloon-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: balloon-bob 2.6s ease-in-out infinite;
+}
+
+/* Only the body scales. The knot is the anchor, so it swells upwards from a
+   fixed point rather than growing out of the middle of nowhere. */
+.balloon-body {
+  /* Almost at the knot, so it swells upward and does not grow down over its
+     own label as it fills. */
+  transform-origin: 50% 93%;
+  transform: scale(calc(0.5 + var(--fill) * 0.5));
+  transition: transform .55s cubic-bezier(.2, 1.5, .4, 1);
+}
+
+.b-skin { fill: var(--balloon-skin); }
+
+/* Stretched rubber goes pale and thin. Fading a lighter copy of the same
+   shape up as it fills is the cheapest honest way to show that. */
+.b-stretch {
+  fill: var(--balloon-stretch);
+  opacity: calc(var(--fill) * 0.55);
+}
+
+.b-shine {
+  fill: #fff;
+  opacity: .45;
+}
+
+.b-knot { fill: var(--balloon-skin); }
+
+.b-string {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.balloon-label {
+  font-size: clamp(9px, 2.2vmin, 12px);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+@keyframes balloon-bob {
+  50% { transform: translateY(-4px) rotate(-1.5deg); }
+}
+
+/* Past four fifths full it starts to look worried, and you can hear it too. */
+.balloon.is-straining .balloon-svg {
+  animation: balloon-tremor .22s ease-in-out infinite;
+}
+
+.balloon.is-straining .balloon-label { color: var(--gold); }
+
+@keyframes balloon-tremor {
+  25%  { transform: translate(-1.5px, 0) rotate(-1deg); }
+  75%  { transform: translate(1.5px, -1px) rotate(1deg); }
+}
+
+/* And past nineteen twentieths it is barely holding on. */
+.balloon.is-critical .balloon-svg {
+  animation: balloon-panic .09s linear infinite;
+}
+
+.balloon.is-critical .balloon-label {
+  color: var(--tricky-d);
+  animation: soft-pulse .5s ease-in-out infinite;
+}
+
+@keyframes balloon-panic {
+  0%   { transform: translate(-2.5px, 1px) rotate(-2deg); }
+  50%  { transform: translate(2.5px, -2px) rotate(2deg); }
+  100% { transform: translate(-2px, 0) rotate(-1deg); }
+}
+
+/* The moment. One hard swell, then gone. */
+.balloon.is-popping .balloon-svg { animation: none; }
+
+.balloon.is-popping .balloon-body {
+  animation: balloon-burst .9s cubic-bezier(.3, 1.2, .5, 1) forwards;
+}
+
+@keyframes balloon-burst {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  62%  { transform: scale(1.1); }
+  78%  { transform: scale(1.55); opacity: 1; }
+  82%  { transform: scale(2.1); opacity: 0; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+.balloon.is-popped .balloon-svg { opacity: 0; }
+
+/* --------------------------------------------------------------------------
+   Puffs — what the word in front of her is worth right now
+   -------------------------------------------------------------------------- */
+
+/* Holds the word and the little pile of what it is worth, so the pile can be
+   positioned against the word rather than against the whole column. */
+.word-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.puffs {
+  position: absolute;
+  /* Sat just above the right-hand end of the word, so it reads as belonging
+     to the word rather than floating in the page. */
+  bottom: 100%;
+  right: clamp(6px, 3vw, 26px);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: clamp(3px, 0.8vmin, 6px);
+  min-height: 22px;
+  pointer-events: none;
+}
+
+/* Says what the dots are, once, quietly. */
+.puffs::before {
+  content: "worth";
+  margin-right: 4px;
+  font-size: clamp(9px, 2.1vmin, 11px);
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.puffs:empty::before { content: none; }
+
+.puff {
+  width: clamp(11px, 2.6vmin, 17px);
+  height: clamp(11px, 2.6vmin, 17px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%,
+              var(--balloon-stretch), var(--balloon-skin) 70%);
+  box-shadow: 0 0 0 2px rgba(255, 84, 112, .2);
+}
+
+.puff.is-new { animation: puff-in .34s cubic-bezier(.2, 1.6, .4, 1); }
+
+@keyframes puff-in {
+  from { transform: scale(0); opacity: 0; }
+}
+
+/* A wrong letter costs one, and she watches it go. */
+.puff.is-lost { animation: puff-lost .42s ease-out forwards; }
+
+@keyframes puff-lost {
+  40%  { transform: scale(1.4); opacity: .9; }
+  100% { transform: scale(0) translateY(10px); opacity: 0; }
+}
+
+/* On the way to the balloon. Fixed to the viewport so nothing can clip it. */
+.puff-flight {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  transition: transform .62s cubic-bezier(.4, 0, .3, 1), opacity .62s ease-in;
+}
+
+/* --------------------------------------------------------------------------
+   The reward
+   -------------------------------------------------------------------------- */
+
+.overlay-reward { padding: 12px; }
+
+.reward-panel {
+  width: min(100%, 900px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.reward-title {
+  margin: 0;
+  font-family: var(--font-letters);
+  font-size: clamp(38px, 11vmin, 78px);
+  line-height: .95;
+  color: var(--gold);
+  text-align: center;
+  animation: pop-in .45s cubic-bezier(.2, 1.7, .4, 1);
+}
+
+.reward-sub {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: clamp(13px, 3vmin, 18px);
+  font-weight: 700;
+  color: var(--ink-soft);
+  letter-spacing: .01em;
+}
+
+.reward-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #000;
+  box-shadow: var(--shadow-soft);
+}
+
+.reward-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.reward-party {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.party-balloons {
+  display: flex;
+  gap: clamp(6px, 2vmin, 16px);
+  font-size: clamp(38px, 12vmin, 84px);
+  line-height: 1;
+}
+
+.party-balloons span {
+  animation: party-float 2.4s ease-in-out infinite;
+}
+
+.party-balloons span:nth-child(2) { animation-delay: -.4s; }
+.party-balloons span:nth-child(3) { animation-delay: -.8s; }
+.party-balloons span:nth-child(4) { animation-delay: -1.2s; }
+.party-balloons span:nth-child(5) { animation-delay: -1.6s; }
+
+@keyframes party-float {
+  50% { transform: translateY(-14px) rotate(6deg); }
+}
+
+/* --------------------------------------------------------------------------
+   Motion
+   -------------------------------------------------------------------------- */
+
+.calm .balloon-svg,
+.calm .party-balloons span { animation: none; }
+
+.calm .balloon.is-critical .balloon-svg,
+.calm .balloon.is-straining .balloon-svg { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .balloon-svg,
+  .balloon.is-straining .balloon-svg,
+  .balloon.is-critical .balloon-svg,
+  .puff.is-new,
+  .party-balloons span {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The practice log, in Settings
+   -------------------------------------------------------------------------- */
+
+.logbook {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 2px solid var(--surface-line);
+  text-align: left;
+}
+
+.logbook-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.logbook-note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--ink-faint);
+  line-height: 1.45;
+}
+
+.logbook-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.logbook-field input {
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--surface-line);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.logbook-field input:focus {
+  outline: none;
+  border-color: var(--nudge);
+}
 </style>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>">
 </head>
@@ -1928,9 +2278,25 @@ button {
       </button>
     </div>
 
-    <div class="hud-score">
-      <span class="score-value" id="scoreValue">0</span>
-      <span class="score-label">points</span>
+    <!-- The balloon is the score. There is no number: "9 more puffs" is
+         something a seven year old can aim at, and "247 points" is not. -->
+    <div class="hud-balloon">
+      <div class="balloon" id="balloon" role="progressbar"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+           aria-label="How full the balloon is">
+        <svg class="balloon-svg" viewBox="0 0 100 140" focusable="false" aria-hidden="true">
+          <g class="balloon-body">
+            <path class="b-skin" d="M50 6c-24 0-40 20-40 46 0 26 20 46 40 52 20-6 40-26 40-52 0-26-16-46-40-46z"/>
+            <!-- The same shape again in a paler rubber, faded up as it fills:
+                 stretched rubber goes thin and light, and that is the tell. -->
+            <path class="b-stretch" d="M50 6c-24 0-40 20-40 46 0 26 20 46 40 52 20-6 40-26 40-52 0-26-16-46-40-46z"/>
+            <ellipse class="b-shine" cx="34" cy="36" rx="10" ry="15"/>
+            <path class="b-knot" d="M44 103h12l-4 9h-4z"/>
+          </g>
+          <path class="b-string" d="M50 112q7 9-1 16 8 7 1 12"/>
+        </svg>
+      </div>
+      <span class="balloon-label" id="balloonLabel">blow it up!</span>
     </div>
 
     <div class="hud-right">
@@ -2014,8 +2380,15 @@ button {
         </svg>
       </div>
 
-      <div class="word-line word-row" id="wordLine" aria-label="The word to finish">
-        <p class="word-line-empty" id="wordLineEmpty">Getting a word…</p>
+      <!-- What this word is currently worth. One puff pops away with every
+           wrong letter, so the cost of guessing is on screen before she
+           guesses rather than explained afterwards. -->
+      <div class="word-wrap">
+        <div class="puffs" id="puffs" role="status" aria-live="polite"></div>
+
+        <div class="word-line word-row" id="wordLine" aria-label="The word to finish">
+          <p class="word-line-empty" id="wordLineEmpty">Getting a word…</p>
+        </div>
       </div>
 
       <div class="build-actions">
@@ -2062,8 +2435,9 @@ button {
     <div class="start-body" id="startBody" hidden>
       <p class="panel-text how-to">
         Listen to the word, then drag the letter that belongs in the gap.
-        Watch out — the letter that looks nearly the same is usually sitting
-        right next to it.
+        Every word you finish blows the balloon up a bit more — but every
+        wrong letter lets some air out first, so take your time and look hard.
+        Fill it before the clock runs out and it goes <strong>POP</strong>.
       </p>
 
       <div class="length-choice" role="group" aria-label="How long to play">
@@ -2078,8 +2452,8 @@ button {
       <button class="btn btn-play" id="playBtn" type="button">Play <span aria-hidden="true">▶</span></button>
 
       <dl class="records" id="records">
-        <div><dt>Cooper's best</dt><dd id="bestScore">0</dd></div>
-        <div><dt>Words finished</dt><dd id="collectionCount">0</dd></div>
+        <div><dt>Biggest balloon</dt><dd id="bestScore">0%</dd></div>
+        <div><dt>Balloons popped</dt><dd id="collectionCount">0</dd></div>
       </dl>
 
       <div class="start-links">
@@ -2112,7 +2486,7 @@ button {
     <h2 class="panel-title" id="endTitle">Time's up!</h2>
 
     <div class="result-stats">
-      <div class="stat"><span class="stat-value" id="endScore">0</span><span class="stat-label">points</span></div>
+      <div class="stat"><span class="stat-value" id="endScore">0%</span><span class="stat-label">balloon</span></div>
       <div class="stat"><span class="stat-value" id="endWords">0</span><span class="stat-label">words</span></div>
       <div class="stat"><span class="stat-value" id="endFirstTime">0</span><span class="stat-label">first go</span></div>
       <div class="stat"><span class="stat-value" id="endTricky">0</span><span class="stat-label">tricky letters</span></div>
@@ -2185,12 +2559,43 @@ button {
   </div>
 </div>
 
+<!-- ─────────────────────────────  Reward  ──────────────────────────── -->
+<div class="overlay overlay-reward" id="rewardScreen">
+  <div class="reward-panel">
+    <h2 class="reward-title">POP!<span class="reward-sub">You filled it, Cooper</span></h2>
+
+    <!-- The video, when there is one. This is the only thing in either game
+         that reaches the network, and it is loaded here and nowhere else. -->
+    <div class="reward-frame" id="rewardFrame" hidden></div>
+
+    <!-- And what happens instead when there is not, or it will not load. -->
+    <div class="reward-party" id="rewardParty" hidden>
+      <div class="party-balloons" aria-hidden="true">
+        <span>🎈</span><span>🎉</span><span>🎈</span><span>✨</span><span>🎈</span>
+      </div>
+      <p class="panel-text">That is a whole balloon. Look at you.</p>
+    </div>
+
+    <button class="btn btn-play" id="rewardDoneBtn" type="button">Done <span aria-hidden="true">✓</span></button>
+  </div>
+</div>
+
 <!-- ─────────────────────────────  Settings  ─────────────────────────── -->
 <div class="overlay" id="settingsScreen">
   <div class="panel">
     <h2 class="panel-title">Settings</h2>
 
     <ul class="settings-list">
+      <li class="setting">
+        <label class="switch">
+          <input type="checkbox" id="setRewardVideo" checked>
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-text">
+            <strong>Pony video</strong>
+            <small>Play a video when the balloon pops, if there is one to play</small>
+          </span>
+        </label>
+      </li>
       <li class="setting">
         <label class="switch">
           <input type="checkbox" id="setAutoSay" checked>
@@ -2252,6 +2657,25 @@ button {
         </label>
       </li>
     </ul>
+
+    <!-- For whoever is keeping an eye on how she is getting on. The upload
+         address is typed in here rather than committed to the repository:
+         the site is public, and an address in it would be an open endpoint
+         for anyone who found it. -->
+    <div class="logbook">
+      <h3 class="logbook-title">Practice log</h3>
+      <p class="logbook-note">
+        Every word and every letter she tries, kept on this device.
+        <strong id="logbookCount">0</strong> waiting to be sent.
+      </p>
+      <label class="logbook-field">
+        <span>Send to</span>
+        <input type="url" id="logbookEndpoint" spellcheck="false"
+               autocomplete="off" autocapitalize="off"
+               placeholder="https://script.google.com/… (optional)">
+      </label>
+      <button class="link-btn" id="logbookExportBtn" type="button">Download the log instead</button>
+    </div>
 
     <div class="panel-actions">
       <button class="btn btn-play" id="settingsCloseBtn" type="button">Done</button>
@@ -24341,6 +24765,45 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     osc.stop(at + length + 0.05);
   }
 
+
+  /* Filtered white noise. Everything else here is an oscillator, but a puff
+     of air and a bursting balloon are both noise - no amount of sine waves
+     sounds like either. */
+  function noise(start, length, level, cutoff) {
+    var audio = context();
+    if (!audio) return;
+
+    var frames = Math.max(1, Math.floor(audio.sampleRate * length));
+    var buffer = audio.createBuffer(1, frames, audio.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < frames; i++) {
+      // Fading the noise itself as well as the gain keeps the tail soft.
+      data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+    }
+
+    var source = audio.createBufferSource();
+    source.buffer = buffer;
+
+    var gain = audio.createGain();
+    var at = audio.currentTime + start;
+    gain.gain.setValueAtTime(level, at);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
+
+    if (cutoff) {
+      var filter = audio.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(cutoff, at);
+      source.connect(filter);
+      filter.connect(gain);
+    } else {
+      source.connect(gain);
+    }
+
+    gain.connect(master);
+    source.start(at);
+    source.stop(at + length + 0.05);
+  }
+
   // A major pentatonic run: there is no way to make it sound wrong.
   var CHEER = [523.25, 659.25, 783.99, 1046.5, 1318.5];
 
@@ -24372,6 +24835,37 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       if (!this.enabled) return;
       for (var i = 0; i < 4; i++) {
         note(400 + i * 90, i * 0.035, 0.06, 0.07, "triangle");
+      }
+    },
+
+
+    /* Air going in. Pitched by how full the balloon already is, so the
+       thirtieth puff sounds tighter than the first - the ear notices the
+       climb long before the numbers would tell her. */
+    inflate: function (fill) {
+      if (!this.enabled) return;
+      var tightness = Math.max(0, Math.min(1, fill || 0));
+      noise(0, 0.16, 0.1, 700 + tightness * 2200);
+      slide(220 + tightness * 260, 320 + tightness * 420, 0.01, 0.18, 0.05);
+    },
+
+    /* Stretched rubber. Deliberately uncomfortable, because the whole point
+       of the last few puffs is that she can hear it coming. */
+    creak: function (fill) {
+      if (!this.enabled) return;
+      var tightness = Math.max(0, Math.min(1, fill || 0));
+      slide(520 + tightness * 300, 900 + tightness * 500, 0, 0.22, 0.05);
+      note(1500 + tightness * 400, 0.06, 0.1, 0.02, "triangle");
+    },
+
+    /* The moment itself. */
+    pop: function () {
+      if (!this.enabled) return;
+      noise(0, 0.09, 0.42, 9000);
+      slide(900, 90, 0, 0.16, 0.16);
+      // The cheer underneath, so the burst lands as a reward and not a bang.
+      for (var i = 0; i < CHEER.length; i++) {
+        note(CHEER[i], 0.14 + i * 0.07, 0.42, 0.14, "sine");
       }
     },
 
@@ -25140,6 +25634,639 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 </script>
 <script>
 /* ==========================================================================
+   logbook.js — what actually happened, so it can be looked at later.
+
+   One record per word: which word, which letters were taken out, and every
+   letter she tried at which hole, with how long she thought about it.
+
+   Deliberately raw. Whether an attempt was right, and whether a wrong one
+   was the b-for-d muddle rather than something else, are both worked out
+   from the word and the position when the log is read - not decided here.
+   Writing "this was a b/d error" into the record would bake in an opinion
+   about what counts as a mistake, and quietly hide any pattern that opinion
+   did not anticipate. The word and the position are enough to recover all of
+   it later, and to ask questions nobody has thought of yet.
+
+   Storage is local first and always. The queue in localStorage is the real
+   copy; uploading is a drain on it, not a destination, which is what makes
+   an iPad on a train work exactly like one at home. Records only leave the
+   queue once a server has actually acknowledged them.
+
+   Nothing in here may ever break the game. Every entry point swallows its
+   own errors: a full disk or a blocked cookie jar costs a log line, not a
+   round.
+   ========================================================================== */
+
+(function (global) {
+  "use strict";
+
+  var QUEUE_KEY = "cooper.logbook.v1";
+  var DEVICE_KEY = "cooper.logbook.device";
+
+  /* Where to send them. Deliberately not in this file: the site is public, so
+     a URL committed here would be an open endpoint for anyone who found it.
+     It is pasted in once on her iPad instead, from Settings, and lives only
+     in that browser. */
+  var ENDPOINT_KEY = "cooper.logbook.endpoint";
+
+  /* About 300 KB of records at roughly 250 bytes each, well inside the 5 MB
+     localStorage gives us, and months of play. Oldest go first if it ever
+     fills: recent history is the interesting history. */
+  var MAX_RECORDS = 1200;
+
+  /* Upload in batches so one bad round cannot wedge the whole queue. */
+  var BATCH = 60;
+
+  var queue = [];
+  var device = "";
+  var round = null;
+  var current = null;   // the word in progress
+  var lastAt = 0;
+  var sending = false;
+
+  function now() {
+    return global.performance && global.performance.now
+      ? global.performance.now() : Date.now();
+  }
+
+  function read(key) {
+    try {
+      return global.localStorage.getItem(key);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function write(key, value) {
+    try {
+      global.localStorage.setItem(key, value);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function save() {
+    if (queue.length > MAX_RECORDS) queue = queue.slice(queue.length - MAX_RECORDS);
+    if (write(QUEUE_KEY, JSON.stringify(queue))) return;
+
+    // Out of room. Halve it and try once more rather than losing the lot.
+    queue = queue.slice(Math.floor(queue.length / 2));
+    write(QUEUE_KEY, JSON.stringify(queue));
+  }
+
+  function push(record) {
+    record.d = device;
+    record.r = round;
+    record.t = Date.now();
+    queue.push(record);
+    save();
+  }
+
+  function makeId(prefix) {
+    return prefix + Math.random().toString(36).slice(2, 10);
+  }
+
+  var Logbook = {
+    enabled: true,
+
+    init: function () {
+      try {
+        queue = JSON.parse(read(QUEUE_KEY) || "[]");
+        if (!Array.isArray(queue)) queue = [];
+      } catch (err) {
+        queue = [];
+      }
+
+      device = read(DEVICE_KEY) || "";
+      if (!device) {
+        // A random id for the iPad, so rounds can be told apart. Not her
+        // name, and nothing that identifies a person.
+        device = makeId("d_");
+        write(DEVICE_KEY, device);
+      }
+
+      // Anything left over from last time goes as soon as there is a network.
+      global.addEventListener("online", function () { Logbook.flush(); });
+      this.flush();
+    },
+
+    endpoint: function (url) {
+      if (url === undefined) return read(ENDPOINT_KEY) || "";
+      if (url) write(ENDPOINT_KEY, url);
+      else {
+        try {
+          global.localStorage.removeItem(ENDPOINT_KEY);
+        } catch (err) { /* nothing to do */ }
+      }
+      return url || "";
+    },
+
+    startRound: function (meta) {
+      if (!this.enabled) return;
+      round = makeId("r_");
+      current = null;
+      push({ k: "round-start", minutes: meta.minutes, game: "missing" });
+    },
+
+    /* A word has appeared and the clock on her thinking starts now. */
+    word: function (info) {
+      if (!this.enabled) return;
+      current = {
+        k: "word",
+        w: info.word,
+        g: info.grade,
+        lv: info.level,
+        h: info.holes.slice(),
+        tries: []
+      };
+      lastAt = now();
+    },
+
+    /* One letter, into one hole.
+
+       `hole` is the position in the word, not which gap it was in the queue,
+       so a word with two letters missing says exactly which one she was
+       filling. `ms` is how long she took over this particular choice: since
+       the word appeared for her first attempt, and since her previous
+       attempt after that.
+
+       Whether it was right is not stored. It is `letter === word[hole]`, and
+       leaving it out keeps the record to what actually happened. */
+    attempt: function (info) {
+      if (!this.enabled || !current) return;
+
+      var at = now();
+      current.tries.push({
+        hole: info.hole,
+        got: info.letter,
+        ms: Math.round(at - lastAt)
+      });
+      lastAt = at;
+    },
+
+    endWord: function (info) {
+      if (!this.enabled || !current) return;
+      current.solved = !!info.solved;
+      current.skipped = !!info.skipped;
+      current.puffs = info.puffs || 0;
+      push(current);
+      current = null;
+    },
+
+    endRound: function (summary) {
+      if (!this.enabled) return;
+      push({
+        k: "round-end",
+        words: summary.words,
+        firstGo: summary.firstGo,
+        tricky: summary.tricky,
+        fill: summary.fill,
+        popped: !!summary.popped
+      });
+      current = null;
+      this.flush();
+    },
+
+    /* Send what we can. Records stay in the queue until a server has said it
+       has them, so a failed upload costs nothing but a retry. */
+    flush: function () {
+      var url = this.endpoint();
+      if (!url || sending || !queue.length) return;
+      if (global.navigator && global.navigator.onLine === false) return;
+      if (typeof global.fetch !== "function") return;
+
+      sending = true;
+      var batch = queue.slice(0, BATCH);
+
+      // text/plain on purpose: anything else triggers a CORS preflight, and
+      // a Google Apps Script web app redirects, which preflight will not
+      // follow. This is the one content type that gets through.
+      global.fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ v: 1, device: device, records: batch })
+      }).then(function (response) {
+        sending = false;
+        if (!response || !response.ok) return;
+
+        queue = queue.slice(batch.length);
+        save();
+        if (queue.length) Logbook.flush();
+      })["catch"](function () {
+        // Offline, blocked, or the endpoint is wrong. Try again next time.
+        sending = false;
+      });
+    },
+
+    /* Everything, as a file, for when there is no endpoint at all - which is
+       the state this ships in. */
+    download: function () {
+      var blob = new global.Blob([JSON.stringify(queue, null, 1)],
+                                 { type: "application/json" });
+      var url = global.URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = "coopers-logbook-" +
+        new Date().toISOString().slice(0, 10) + ".json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      global.setTimeout(function () { global.URL.revokeObjectURL(url); }, 1000);
+    },
+
+    pending: function () {
+      return queue.length;
+    },
+
+    /* Exposed for the tests. */
+    peek: function () {
+      return queue.slice();
+    },
+
+    clear: function () {
+      queue = [];
+      save();
+    }
+  };
+
+  global.Logbook = Logbook;
+})(window);
+</script>
+<script>
+/* ==========================================================================
+   balloon.js — the thing she is actually playing for.
+
+   Every word she finishes puffs it up a little further. The point of a
+   balloon rather than a bar or a tower is the strain: it does not just get
+   fuller, it gets visibly more precarious. It stretches, the rubber goes
+   pale and thin, the wobble quickens, and past about four fifths full it
+   starts trembling and creaking. By the end she can see the pop coming,
+   which is the whole feeling a progress bar cannot give you.
+
+   Fill only ever goes up. A wrong letter costs her puffs before they are
+   banked - it never takes air back out - so the balloon is a record of what
+   she has earned and nothing on screen ever retreats.
+   ========================================================================== */
+
+(function (global) {
+  "use strict";
+
+  /* Past these fractions the balloon starts looking worried. */
+  var STRAINING = 0.8;
+  var CRITICAL = 0.95;
+
+  var POP_MS = 900;
+
+  var root = null;
+  var label = null;
+  var onPop = null;
+
+  var capacity = 1;
+  var filled = 0;
+  var popped = false;
+  var popTimer = null;
+
+  function ratio() {
+    return capacity > 0 ? Math.min(1, filled / capacity) : 0;
+  }
+
+  function paint() {
+    if (!root) return;
+
+    var fill = ratio();
+    root.style.setProperty("--fill", fill.toFixed(4));
+    root.classList.toggle("is-straining", fill >= STRAINING && !popped);
+    root.classList.toggle("is-critical", fill >= CRITICAL && !popped);
+
+    var left = Math.max(0, capacity - filled);
+    root.setAttribute("aria-valuenow", String(Math.round(fill * 100)));
+
+    if (!label) return;
+    if (popped) {
+      label.textContent = "POP!";
+    } else if (left === 0) {
+      label.textContent = "ready to go!";
+    } else {
+      // A count of puffs means nothing to her; a count of words is something
+      // she can actually aim at.
+      label.textContent = left + (left === 1 ? " more puff" : " more puffs");
+    }
+  }
+
+  var Balloon = {
+    /* options: { element, label, onPop } */
+    init: function (options) {
+      root = options.element;
+      label = options.label || null;
+      onPop = options.onPop || null;
+      this.reset(1);
+    },
+
+    reset: function (size) {
+      capacity = Math.max(1, size | 0);
+      filled = 0;
+      popped = false;
+      global.clearTimeout(popTimer);
+
+      if (root) root.classList.remove("is-popping", "is-popped");
+      paint();
+    },
+
+    /* Puff it up. Returns true on the puff that bursts it, and only ever
+       once - the round ends on that, so a second call must not fire it
+       again. */
+    add: function (puffs) {
+      if (popped || !root) return false;
+
+      filled += Math.max(0, puffs | 0);
+      paint();
+
+      if (filled < capacity) return false;
+
+      popped = true;
+      root.classList.add("is-popping");
+      paint();
+
+      popTimer = global.setTimeout(function () {
+        if (!root) return;
+        root.classList.add("is-popped");
+        if (onPop) onPop();
+      }, POP_MS);
+
+      return true;
+    },
+
+    /* Where the puffs should fly to, for the animation that sends them. */
+    element: function () {
+      return root;
+    },
+
+    fill: function () {
+      return ratio();
+    },
+
+    percent: function () {
+      return Math.round(ratio() * 100);
+    },
+
+    remaining: function () {
+      return Math.max(0, capacity - filled);
+    },
+
+    capacity: function () {
+      return capacity;
+    },
+
+    hasPopped: function () {
+      return popped;
+    },
+
+    /* Stop a pending pop dead - used when the clock beats her to it. */
+    cancel: function () {
+      global.clearTimeout(popTimer);
+    }
+  };
+
+  global.Balloon = Balloon;
+})(window);
+</script>
+<script>
+/* ==========================================================================
+   reward.js — what happens when the balloon goes.
+
+   This is the only part of either game that touches the network, so it is
+   built to be entirely optional. Nothing here loads until the balloon
+   actually bursts, and every route through it ends in a celebration even
+   when there is no connection, no configuration and no YouTube.
+
+   Three sources, tried in order:
+
+     1. VIDEOS below - a list you have watched yourself. Best option.
+     2. CHANNEL_ID  - a random video from that channel's uploads. No API key
+                      is involved, so there is no secret to leak out of a
+                      public repository; the trade is that a random pick from
+                      a whole back catalogue is sometimes an advert or a
+                      two hour compilation.
+     3. Neither, or the video will not load - a full screen party instead.
+   ========================================================================== */
+
+(function (global) {
+  "use strict";
+
+  /* ----------------------------------------------------------------------
+     The knobs. Both are meant to be edited by hand.
+     ---------------------------------------------------------------------- */
+
+  /* Videos you have picked. Just the id - the part of a YouTube link after
+     "v=" or after "youtu.be/". One per line. When this list has anything in
+     it at all, it is used and the channel below is ignored.
+
+       var VIDEOS = [
+         "dQw4w9WgXcQ",
+         "aAkMkVFwAoo"
+       ]; */
+  var VIDEOS = [];
+
+  /* Otherwise, a random video from this channel. Needs the real channel id,
+     which starts "UC" - the @name or /c/name in the address bar is not it.
+     To find it: open the channel, view source, and search for "channelId".
+     Leave it empty and the balloon bursts into a party instead. */
+  var CHANNEL_ID = "";
+
+  /* How long to wait for YouTube before giving up and throwing the party.
+     She has just popped a balloon; she is not going to sit through a spinner. */
+  var PATIENCE_MS = 6000;
+
+  // ------------------------------------------------------------------------
+
+  var dom = {};
+  var onDone = null;
+  var player = null;
+  var settled = false;
+  var patience = null;
+  var partyTimer = null;
+
+  function videoUrl() {
+    var params =
+      "?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=0&disablekb=1" +
+      "&iv_load_policy=3&enablejsapi=1&origin=" +
+      encodeURIComponent(global.location.origin);
+
+    if (VIDEOS.length) {
+      var id = VIDEOS[(Math.random() * VIDEOS.length) | 0];
+      return "https://www.youtube-nocookie.com/embed/" + id + params;
+    }
+
+    if (/^UC[\w-]{20,24}$/.test(CHANNEL_ID)) {
+      // Every channel's uploads live in a playlist whose id is the channel
+      // id with UC swapped for UU. Picking an index into it gets a different
+      // video each time without asking YouTube anything first.
+      var uploads = "UU" + CHANNEL_ID.slice(2);
+      var index = (Math.random() * 40) | 0;
+      return "https://www.youtube-nocookie.com/embed/videoseries" + params +
+             "&list=" + uploads + "&index=" + index;
+    }
+
+    return "";
+  }
+
+  /* No video, or no way to reach it. She still gets a moment. */
+  function party() {
+    if (dom.video) dom.video.innerHTML = "";
+    if (dom.party) dom.party.hidden = false;
+    if (dom.frame) dom.frame.hidden = true;
+
+    global.Confetti.celebrate();
+    global.Kitten.react("bigcheer");
+
+    var bursts = 0;
+    global.clearInterval(partyTimer);
+    partyTimer = global.setInterval(function () {
+      if (++bursts > 5) {
+        global.clearInterval(partyTimer);
+        return;
+      }
+      global.Confetti.burst(
+        Math.random() * global.innerWidth,
+        global.innerHeight * (0.3 + Math.random() * 0.4),
+        1.3
+      );
+      global.Kitten.react("bigcheer");
+    }, 900);
+  }
+
+  function settle(ok) {
+    if (settled) return;
+    settled = true;
+    global.clearTimeout(patience);
+    if (!ok) party();
+  }
+
+  /* The IFrame API, fetched only now and only if there is something to
+     play. If it will not come, that is not an error - it is a party. */
+  function withApi(then) {
+    if (global.YT && global.YT.Player) {
+      then(true);
+      return;
+    }
+
+    var done = false;
+    var finish = function (ok) {
+      if (done) return;
+      done = true;
+      then(ok);
+    };
+
+    var previous = global.onYouTubeIframeAPIReady;
+    global.onYouTubeIframeAPIReady = function () {
+      if (typeof previous === "function") previous();
+      finish(true);
+    };
+
+    var script = document.createElement("script");
+    script.src = "https://www.youtube.com/iframe_api";
+    script.async = true;
+    script.addEventListener("error", function () { finish(false); });
+    document.head.appendChild(script);
+
+    global.setTimeout(function () { finish(false); }, PATIENCE_MS);
+  }
+
+  function playVideo(url) {
+    dom.party.hidden = true;
+    dom.frame.hidden = false;
+    dom.frame.innerHTML = "";
+
+    var frame = document.createElement("iframe");
+    frame.className = "reward-frame";
+    frame.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture");
+    frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    frame.setAttribute("title", "Your reward video");
+    frame.src = url;
+    dom.frame.appendChild(frame);
+
+    patience = global.setTimeout(function () { settle(false); }, PATIENCE_MS);
+
+    withApi(function (ok) {
+      if (!ok) {
+        settle(false);
+        return;
+      }
+      try {
+        player = new global.YT.Player(frame, {
+          events: {
+            onReady: function () { settle(true); },
+            onError: function () { settle(false); },
+            onStateChange: function (event) {
+              // Ended. Close on her behalf rather than leaving her sitting
+              // in front of whatever YouTube decides to suggest next.
+              if (event.data === 0) Reward.close();
+            }
+          }
+        });
+      } catch (err) {
+        settle(false);
+      }
+    });
+  }
+
+  var Reward = {
+    enabled: true,
+
+    init: function (options) {
+      dom = options;
+      if (dom.doneBtn) {
+        dom.doneBtn.addEventListener("click", function () { Reward.close(); });
+      }
+    },
+
+    show: function (done) {
+      onDone = done || null;
+      settled = false;
+      player = null;
+
+      dom.screen.classList.add("is-open");
+
+      var url = this.enabled ? videoUrl() : "";
+      if (url) {
+        playVideo(url);
+      } else {
+        settle(true);
+        party();
+      }
+    },
+
+    close: function () {
+      global.clearTimeout(patience);
+      global.clearInterval(partyTimer);
+
+      if (player && typeof player.destroy === "function") {
+        try {
+          player.destroy();
+        } catch (err) {
+          /* Already gone. */
+        }
+      }
+      player = null;
+
+      // Emptying the container stops the audio dead, which matters more than
+      // it sounds: a video still talking over the results screen is horrible.
+      if (dom.frame) dom.frame.innerHTML = "";
+      if (dom.screen) dom.screen.classList.remove("is-open");
+      global.Confetti.clear();
+
+      var finished = onDone;
+      onDone = null;
+      if (finished) finished();
+    }
+  };
+
+  global.Reward = Reward;
+})(window);
+</script>
+<script>
+/* ==========================================================================
    puzzle.js — building one missing-letter puzzle.
 
    A puzzle is a word with holes punched in it and a small pile of letters to
@@ -25436,6 +26563,15 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
    drags the letter that belongs in the hole. The right one locks in and goes
    green; the wrong one tips over and falls back into the pile.
 
+   The round is: fill the balloon before the clock runs out. That shape is
+   deliberate. Scoring by how many words she got through rewarded rushing,
+   and since the pile nearly always holds the answer next to the letter it is
+   muddled with, guessing was a coin flip that paid out half the time and
+   cost nothing. Now there is no "more" to earn by going faster - the balloon
+   needs what it needs - and every wrong letter lets air out of the word she
+   is on before it is banked. Taking her time is not merely better; it is the
+   only way to reach the pop.
+
    Most of the time the hole wants one of b, d, p, q, n or m, and most of the
    time the letter it is muddled with is sitting right there in the pile — so
    the game keeps asking the one question that is actually hard, over and
@@ -25449,17 +26585,22 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   var NAMES = [PLAYER, "Meeps", "Meepsie"];
   var NAME_CHANCE = 0.45;
 
-  /* Points by word length, plus what she earns for the hard parts. Getting
-     it first go is worth as much as two extra letters: this game is about
-     stopping to look, not about speed. */
-  var POINTS = [0, 0, 0, 10, 14, 20, 28, 38, 50];
-  var TRICKY_BONUS = 8;
-  var CLEAN_BONUS = 10;
+  /* What a word is worth in puffs of air: longer words and tricky holes are
+     worth more, and the pile of them sits beside the word so she can see the
+     stake before she touches anything. */
+  var PUFF_BASE = 2;
+  var PUFF_PER_TRICKY = 1;
+
+  /* How much a balloon holds, per minute of play. Set so that answering
+     carefully fills it with time to spare and guessing does not get there -
+     see the two simulated players in the tests, which is where this number
+     came from and where it should be re-checked if anything else changes. */
+  var PUFFS_PER_MINUTE = 23;
 
   /* How long the finished word stays up before the next one, in
      milliseconds. Long enough to enjoy, short enough not to lose her. */
-  var ADVANCE_MS = 1750;
-  var ADVANCE_BIG_MS = 2200;
+  var ADVANCE_MS = 900;
+  var ADVANCE_BIG_MS = 1200;
 
   /* How long the wrong letter sits in the hole before it falls out. Dragging
      is off for exactly this long, so a tile cannot be grabbed halfway
@@ -25481,10 +26622,14 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     "What a word!"
   ];
 
-  var STORE_KEY = "missingletters.v1";
+  /* v2: the old best scores were points and are not comparable to a
+     balloon, so they are left behind rather than sat at the top of the
+     screen being meaningless. */
+  var STORE_KEY = "missingletters.v2";
   var SETTINGS_KEY = "cooper.settings.v1";
 
   var DEFAULT_SETTINGS = {
+    rewardVideo: true,
     autoSay: true,
     speakDefinitions: true,
     letterHelper: true,
@@ -25495,14 +26640,18 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
   var dom = {};
   var settings = Object.assign({}, DEFAULT_SETTINGS);
-  var records = { best: 0, collection: [] };
+  /* best is the fullest balloon she has ever got, as a percentage; pops is
+     how many she has burst, ever. */
+  var records = { best: 0, pops: 0, collection: [] };
 
   var state = {
     running: false,
     paused: false,
     minutes: 5,
     secondsLeft: 0,
-    score: 0,
+    banked: 0,       // puffs in the balloon
+    puffs: 0,        // what the word in front of her is worth right now
+    popped: false,
 
     level: 0,        // 0-5, see puzzle.js
     cleanRun: 0,     // consecutive first-go answers, for the ladder
@@ -25534,6 +26683,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       var saved = JSON.parse(global.localStorage.getItem(STORE_KEY) || "{}");
       if (saved.records) {
         records.best = saved.records.best || 0;
+        records.pops = saved.records.pops || 0;
         records.collection = saved.records.collection || [];
       }
       // Settings are shared with the word game, so the sound switch is the
@@ -25770,6 +26920,106 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     applyLetterHelper();
   }
 
+  /* What this word is worth if she gets it right from here. */
+  function puffValue(word, holes) {
+    var value = PUFF_BASE + Math.max(0, word.length - 3);
+    for (var i = 0; i < holes.length; i++) {
+      if (global.Letters.isTricky(word[holes[i]])) value += PUFF_PER_TRICKY;
+    }
+    return value;
+  }
+
+  /* Draw the stake. Called once when the word appears and again each time a
+     wrong letter costs her one, so the pile only ever shrinks in front of
+     her - which is the whole point of showing it. */
+  function renderPuffs(lost) {
+    dom.puffs.innerHTML = "";
+
+    for (var i = 0; i < state.puffs; i++) {
+      var puff = document.createElement("span");
+      puff.className = "puff" + (lost ? "" : " is-new");
+      puff.style.animationDelay = (i * 45) + "ms";
+      dom.puffs.appendChild(puff);
+    }
+
+    // The one that just went, kept on screen long enough to be seen going.
+    if (lost) {
+      var gone = document.createElement("span");
+      gone.className = "puff is-lost";
+      dom.puffs.appendChild(gone);
+      global.setTimeout(function () {
+        if (gone.parentElement) gone.parentElement.removeChild(gone);
+      }, 450);
+    }
+
+    dom.puffs.setAttribute("aria-label",
+      "This word is worth " + state.puffs +
+      (state.puffs === 1 ? " puff" : " puffs"));
+  }
+
+  /* Send them up to the balloon one at a time. The stagger matters: the
+     balloon visibly grows in steps and the puff sound climbs with it, which
+     is far better than one silent jump. */
+  function flyPuffsToBalloon(then) {
+    var target = global.Balloon.element();
+    var flying = dom.puffs.querySelectorAll(".puff:not(.is-lost)");
+
+    if (!target || !flying.length) {
+      then(false);
+      return;
+    }
+
+    var box = target.getBoundingClientRect();
+    var landed = 0;
+    var total = flying.length;
+    var settled = false;
+
+    // Once it bursts the round is over, so the rest of the puffs land into
+    // nothing and must not call back a second time.
+    function finish(burst) {
+      if (settled) return;
+      settled = true;
+      then(burst);
+    }
+
+    for (var i = 0; i < total; i++) {
+      (function (source, delay) {
+        var from = source.getBoundingClientRect();
+        source.style.visibility = "hidden";
+
+        var ghost = document.createElement("span");
+        ghost.className = "puff puff-flight";
+        ghost.style.left = from.left + "px";
+        ghost.style.top = from.top + "px";
+        ghost.style.width = from.width + "px";
+        ghost.style.height = from.height + "px";
+        document.body.appendChild(ghost);
+
+        global.setTimeout(function () {
+          ghost.style.transform =
+            "translate(" + (box.left + box.width / 2 - from.left - from.width / 2) +
+            "px," + (box.top + box.height * 0.55 - from.top - from.height / 2) +
+            "px) scale(.45)";
+          ghost.style.opacity = "0.15";
+        }, delay + 20);
+
+        global.setTimeout(function () {
+          if (ghost.parentElement) ghost.parentElement.removeChild(ghost);
+
+          // Each puff inflates the balloon as it arrives.
+          var burst = global.Balloon.add(1);
+          global.Sound.inflate(global.Balloon.fill());
+          if (!burst && global.Balloon.fill() >= 0.8) {
+            global.Sound.creak(global.Balloon.fill());
+          }
+
+          if (burst) finish(true);
+          else if (++landed >= total) finish(false);
+        }, delay + 560);
+      })(flying[i], i * 110);
+    }
+  }
+
   function openHoles() {
     var open = [];
     for (var i = 0; i < state.holes.length; i++) {
@@ -25952,6 +27202,14 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   function rejectDrop(item, hole) {
     state.misses++;
 
+    // Air out of the word, before any of it is banked. Halving makes the
+    // first mistake the expensive one, which is exactly where the thinking
+    // has to happen; the floor of one means finishing always counts for
+    // something, however many goes it took.
+    var before = state.puffs;
+    state.puffs = Math.max(1, Math.ceil(state.puffs / 2));
+    renderPuffs(state.puffs < before);
+
     // Show it sitting in the hole first: she needs to see the letter she
     // actually chose, in place, before it goes anywhere.
     hole.el.appendChild(item.el);
@@ -25991,7 +27249,12 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       return;
     }
 
-    if (item.letter === hole.letter) lockIn(item, hole, ghostRect);
+    var correct = item.letter === hole.letter;
+    // hole.at is the position in the word, so a word with two letters out
+    // records which of them she was filling.
+    global.Logbook.attempt({ hole: hole.at, letter: item.letter });
+
+    if (correct) lockIn(item, hole, ghostRect);
     else rejectDrop(item, hole);
   }
 
@@ -26003,13 +27266,6 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     var cheer = pick(big ? BIG_PRAISE : PRAISE);
     if (Math.random() > NAME_CHANCE) return cheer;
     return cheer.replace(/[!.]+$/, "") + ", " + pick(NAMES) + "!";
-  }
-
-  function updateScore() {
-    dom.scoreValue.textContent = state.score;
-    dom.scoreValue.classList.remove("is-bumped");
-    void dom.scoreValue.offsetWidth;
-    dom.scoreValue.classList.add("is-bumped");
   }
 
   function addSolvedChip(word, points) {
@@ -26047,13 +27303,12 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       if (global.Letters.isTricky(word[puzzle.holes[i]])) tricky++;
     }
 
-    var points = (POINTS[word.length] || POINTS[POINTS.length - 1]) +
-                 tricky * TRICKY_BONUS + (clean ? CLEAN_BONUS : 0);
-
-    state.score += points;
+    var puffs = state.puffs;
+    global.Logbook.endWord({ solved: true, puffs: puffs });
+    state.banked += puffs;
     state.trickyFixed += tricky;
     if (clean) state.firstTime++;
-    state.solved.unshift({ word: word, points: points, clean: clean });
+    state.solved.unshift({ word: word, points: puffs, clean: clean });
     if (records.collection.indexOf(word) === -1) records.collection.push(word);
 
     // The ladder. Two clean answers in a row and the words get longer and
@@ -26075,7 +27330,8 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     clearHints();
 
     showMessage(
-      praise + " <strong>" + word + "</strong> <span class=\"pts\">+" + points + "</span>" +
+      praise + " <strong>" + word + "</strong> <span class=\"pts\">+" + puffs +
+      (puffs === 1 ? " puff" : " puffs") + "</span>" +
       (clean ? " &nbsp;<em>first go!</em>" : ""),
       "good"
     );
@@ -26088,19 +27344,25 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       { text: word, rate: 0.82, pitch: 1.1 }
     ]);
 
-    updateScore();
-    addSolvedChip(word, points);
+    addSolvedChip(word, puffs);
 
+    // The puffs fly up and blow it out one at a time. If the last of them is
+    // the one that bursts it, the round is over and the balloon's own pop
+    // callback takes it from here.
     global.clearTimeout(state.advance);
-    state.advance = global.setTimeout(function () {
-      nextPuzzle(null);
-    }, big ? ADVANCE_BIG_MS : ADVANCE_MS);
+    flyPuffsToBalloon(function (burst) {
+      if (burst || !state.running) return;
+      state.advance = global.setTimeout(function () {
+        nextPuzzle(null);
+      }, big ? ADVANCE_BIG_MS : ADVANCE_MS);
+    });
   }
 
   function skipWord() {
     if (!state.running || state.paused || !state.puzzle) return;
 
     var word = state.puzzle.word;
+    global.Logbook.endWord({ solved: false, skipped: true, puffs: 0 });
     state.cleanRun = 0;
     state.level = Math.max(state.level - 1, 0);
 
@@ -26165,6 +27427,14 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     state.used.add(puzzle.word);
     state.misses = 0;
     state.picked = 0;
+    state.puffs = puffValue(puzzle.word, puzzle.holes);
+    renderPuffs(false);
+    global.Logbook.word({
+      word: puzzle.word,
+      grade: global.Dictionary.grade(puzzle.word),
+      level: state.level,
+      holes: puzzle.holes
+    });
 
     dom.wordLine.classList.remove("is-solved", "is-wrapped");
     clearMessage();
@@ -26219,7 +27489,9 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   function startRound() {
     state.running = true;
     state.paused = false;
-    state.score = 0;
+    state.banked = 0;
+    state.puffs = 0;
+    state.popped = false;
     state.level = 0;
     state.cleanRun = 0;
     state.solved = [];
@@ -26231,8 +27503,13 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
     dom.foundList.innerHTML = "";
     dom.foundCount.textContent = "0";
-    dom.scoreValue.textContent = "0";
+    dom.puffs.innerHTML = "";
     dom.app.classList.remove("is-paused");
+
+    // Bigger balloon for a longer round, so the target stays roughly the
+    // same distance away whichever length she picks.
+    global.Balloon.reset(state.minutes * PUFFS_PER_MINUTE);
+    global.Logbook.startRound({ minutes: state.minutes });
 
     global.Kitten.reset();
     paintClock();
@@ -26240,6 +27517,48 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     global.Sound.start();
 
     nextPuzzle(null);
+  }
+
+  function logRoundEnd() {
+    global.Logbook.endRound({
+      words: state.solved.length,
+      firstGo: state.firstTime,
+      tricky: state.trickyFixed,
+      fill: global.Balloon.percent(),
+      popped: state.popped
+    });
+  }
+
+  function rememberBest() {
+    var fill = global.Balloon.percent();
+    if (fill > records.best) records.best = fill;
+  }
+
+  /* She filled it. The round is over the moment it goes: everything is saved
+     before the video starts, so closing the tab halfway through a pony
+     cannot cost her the balloon she just earned. */
+  function burstRound() {
+    if (!state.running) return;
+
+    state.running = false;
+    state.popped = true;
+    stopClock();
+    global.clearTimeout(state.advance);
+    finishSettle();
+    global.Speech.stop();
+
+    records.pops++;
+    rememberBest();
+    saveStore();
+    logRoundEnd();
+
+    global.Sound.pop();
+    global.Kitten.react("bigcheer");
+    global.Confetti.celebrate();
+
+    global.Reward.show(function () {
+      showResults(false);
+    });
   }
 
   function pauseRound() {
@@ -26276,8 +27595,12 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
     if (!quit) global.Sound.timeUp();
 
-    if (state.score > records.best) records.best = state.score;
+    // A balloon still in one piece is not a failure, it is a high-water mark
+    // to beat next time.
+    global.Balloon.cancel();
+    rememberBest();
     saveStore();
+    logRoundEnd();
 
     showResults(quit);
   }
@@ -26337,17 +27660,19 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   }
 
   function showResults(quit) {
-    dom.endTitle.textContent = quit
-      ? "Round finished, " + PLAYER
-      : "Time's up, " + PLAYER + "!";
-    dom.endScore.textContent = state.score;
+    dom.endTitle.textContent = state.popped
+      ? "POP!"
+      : (quit ? "Round finished, " + PLAYER : "Time's up, " + PLAYER + "!");
+    dom.endScore.textContent = global.Balloon.percent() + "%";
     dom.endWords.textContent = state.solved.length;
     dom.endFirstTime.textContent = state.firstTime;
     dom.endTricky.textContent = state.trickyFixed;
 
     var note;
-    if (state.score >= records.best && state.score > 0) {
-      note = "A new best score, " + PLAYER + "! 🏆";
+    if (state.popped) {
+      note = "You popped it, " + PLAYER + "! 🎈";
+    } else if (global.Balloon.percent() >= records.best && global.Balloon.percent() > 0) {
+      note = "The biggest you have ever got it. 🏆";
     } else if (state.solved.length && state.firstTime === state.solved.length) {
       note = "Every single one first go. That is properly good.";
     } else if (state.trickyFixed >= 6) {
@@ -26422,6 +27747,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   // ------------------------------------------------------------------------
 
   var SETTING_INPUTS = {
+    rewardVideo: "setRewardVideo",
     autoSay: "setAutoSay",
     speakDefinitions: "setSpeakDefinitions",
     letterHelper: "setLetterHelper",
@@ -26432,10 +27758,30 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
   function applySettings() {
     global.Sound.enabled = settings.sound;
+    global.Reward.enabled = settings.rewardVideo;
     global.Kitten.setEnabled(settings.kitten);
     global.Confetti.calm = settings.calm;
     document.body.classList.toggle("calm", settings.calm);
     applyLetterHelper();
+  }
+
+  function refreshLogbook() {
+    dom.logbookCount.textContent = global.Logbook.pending();
+  }
+
+  function wireLogbook() {
+    dom.logbookEndpoint.value = global.Logbook.endpoint();
+
+    dom.logbookEndpoint.addEventListener("change", function () {
+      var url = dom.logbookEndpoint.value.trim();
+      global.Logbook.endpoint(url);
+      if (url) global.Logbook.flush();
+      refreshLogbook();
+    });
+
+    dom.logbookExportBtn.addEventListener("click", function () {
+      global.Logbook.download();
+    });
   }
 
   function wireSettings() {
@@ -26616,6 +27962,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       openOverlay(dom.helpScreen);
     });
     dom.startSettingsBtn.addEventListener("click", function () {
+      refreshLogbook();
       openOverlay(dom.settingsScreen);
     });
     dom.helpCloseBtn.addEventListener("click", function () {
@@ -26624,6 +27971,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
     dom.settingsBtn.addEventListener("click", function () {
       if (state.running && !state.paused) pauseRound();
+      refreshLogbook();
       openOverlay(dom.settingsScreen);
     });
     dom.settingsCloseBtn.addEventListener("click", function () {
@@ -26654,8 +28002,8 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   }
 
   function refreshRecords() {
-    dom.bestScore.textContent = records.best;
-    dom.collectionCount.textContent = records.collection.length;
+    dom.bestScore.textContent = records.best + "%";
+    dom.collectionCount.textContent = records.pops;
   }
 
   // ------------------------------------------------------------------------
@@ -26665,7 +28013,9 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   function collectDom() {
     [
       "app", "pool", "wordLine", "message", "sayWordBtn", "sayMeaningBtn",
-      "skipBtn", "foundList", "foundCount", "scoreValue", "timer",
+      "skipBtn", "foundList", "foundCount", "balloon", "balloonLabel",
+      "puffs", "rewardScreen", "rewardFrame", "rewardParty", "rewardDoneBtn",
+      "timer",
       "timerText", "timerFill", "pauseBtn", "helpBtn", "settingsBtn",
       "startScreen", "startBody", "loadingRow", "playBtn", "durationChips",
       "bestScore", "collectionCount", "startHelpBtn", "startSettingsBtn",
@@ -26673,7 +28023,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       "endScore", "endWords", "endFirstTime", "endTricky", "endNote",
       "wobblyBlock", "wobblyList", "missedBlock", "missedList", "againBtn",
       "homeBtn", "helpScreen", "helpCards", "helpCloseBtn", "settingsScreen",
-      "settingsCloseBtn"
+      "settingsCloseBtn", "logbookCount", "logbookEndpoint", "logbookExportBtn"
     ].forEach(function (id) {
       dom[id] = byId(id);
     });
@@ -26708,10 +28058,23 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     collectDom();
     loadStore();
 
+    global.Logbook.init();
     global.Confetti.init(byId("confetti"));
     global.Kitten.init(byId("kitten"));
+    global.Balloon.init({
+      element: dom.balloon,
+      label: dom.balloonLabel,
+      onPop: burstRound
+    });
+    global.Reward.init({
+      screen: dom.rewardScreen,
+      frame: dom.rewardFrame,
+      party: dom.rewardParty,
+      doneBtn: dom.rewardDoneBtn
+    });
 
     wireSettings();
+    wireLogbook();
     wireButtons();
     wireDragDrop();
     buildHelpCards();
@@ -26743,7 +28106,11 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     level: function () { return state.level; },
     misses: function () { return state.misses; },
     solvedCount: function () { return state.solved.length; },
-    score: function () { return state.score; }
+    score: function () { return state.banked; },
+    puffs: function () { return state.puffs; },
+    fill: function () { return global.Balloon.fill(); },
+    popped: function () { return state.popped; },
+    capacity: function () { return global.Balloon.capacity(); }
   };
 
   if (document.readyState === "loading") {

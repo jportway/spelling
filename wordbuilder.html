@@ -24043,6 +24043,45 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     osc.stop(at + length + 0.05);
   }
 
+
+  /* Filtered white noise. Everything else here is an oscillator, but a puff
+     of air and a bursting balloon are both noise - no amount of sine waves
+     sounds like either. */
+  function noise(start, length, level, cutoff) {
+    var audio = context();
+    if (!audio) return;
+
+    var frames = Math.max(1, Math.floor(audio.sampleRate * length));
+    var buffer = audio.createBuffer(1, frames, audio.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < frames; i++) {
+      // Fading the noise itself as well as the gain keeps the tail soft.
+      data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+    }
+
+    var source = audio.createBufferSource();
+    source.buffer = buffer;
+
+    var gain = audio.createGain();
+    var at = audio.currentTime + start;
+    gain.gain.setValueAtTime(level, at);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
+
+    if (cutoff) {
+      var filter = audio.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(cutoff, at);
+      source.connect(filter);
+      filter.connect(gain);
+    } else {
+      source.connect(gain);
+    }
+
+    gain.connect(master);
+    source.start(at);
+    source.stop(at + length + 0.05);
+  }
+
   // A major pentatonic run: there is no way to make it sound wrong.
   var CHEER = [523.25, 659.25, 783.99, 1046.5, 1318.5];
 
@@ -24074,6 +24113,37 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       if (!this.enabled) return;
       for (var i = 0; i < 4; i++) {
         note(400 + i * 90, i * 0.035, 0.06, 0.07, "triangle");
+      }
+    },
+
+
+    /* Air going in. Pitched by how full the balloon already is, so the
+       thirtieth puff sounds tighter than the first - the ear notices the
+       climb long before the numbers would tell her. */
+    inflate: function (fill) {
+      if (!this.enabled) return;
+      var tightness = Math.max(0, Math.min(1, fill || 0));
+      noise(0, 0.16, 0.1, 700 + tightness * 2200);
+      slide(220 + tightness * 260, 320 + tightness * 420, 0.01, 0.18, 0.05);
+    },
+
+    /* Stretched rubber. Deliberately uncomfortable, because the whole point
+       of the last few puffs is that she can hear it coming. */
+    creak: function (fill) {
+      if (!this.enabled) return;
+      var tightness = Math.max(0, Math.min(1, fill || 0));
+      slide(520 + tightness * 300, 900 + tightness * 500, 0, 0.22, 0.05);
+      note(1500 + tightness * 400, 0.06, 0.1, 0.02, "triangle");
+    },
+
+    /* The moment itself. */
+    pop: function () {
+      if (!this.enabled) return;
+      noise(0, 0.09, 0.42, 9000);
+      slide(900, 90, 0, 0.16, 0.16);
+      // The cheer underneath, so the burst lands as a reward and not a bang.
+      for (var i = 0; i < CHEER.length; i++) {
+        note(CHEER[i], 0.14 + i * 0.07, 0.42, 0.14, "sine");
       }
     },
 

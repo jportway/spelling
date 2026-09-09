@@ -293,3 +293,353 @@
     animation: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   The balloon
+
+   It sits where the points total used to be, because it *is* the score now.
+   Two things carry the feeling: it grows, and it starts to look like it is
+   in trouble. The second one is what a progress bar can never do.
+   -------------------------------------------------------------------------- */
+
+.game-missing {
+  --balloon-skin: #ff5470;
+  --balloon-stretch: #ffc9d4;
+}
+
+.hud-balloon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+}
+
+.balloon {
+  --fill: 0;
+  width: clamp(54px, 12.5vmin, 88px);
+  height: clamp(70px, 16.5vmin, 112px);
+  display: grid;
+  place-items: center;
+}
+
+.balloon-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: balloon-bob 2.6s ease-in-out infinite;
+}
+
+/* Only the body scales. The knot is the anchor, so it swells upwards from a
+   fixed point rather than growing out of the middle of nowhere. */
+.balloon-body {
+  /* Almost at the knot, so it swells upward and does not grow down over its
+     own label as it fills. */
+  transform-origin: 50% 93%;
+  transform: scale(calc(0.5 + var(--fill) * 0.5));
+  transition: transform .55s cubic-bezier(.2, 1.5, .4, 1);
+}
+
+.b-skin { fill: var(--balloon-skin); }
+
+/* Stretched rubber goes pale and thin. Fading a lighter copy of the same
+   shape up as it fills is the cheapest honest way to show that. */
+.b-stretch {
+  fill: var(--balloon-stretch);
+  opacity: calc(var(--fill) * 0.55);
+}
+
+.b-shine {
+  fill: #fff;
+  opacity: .45;
+}
+
+.b-knot { fill: var(--balloon-skin); }
+
+.b-string {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.balloon-label {
+  font-size: clamp(9px, 2.2vmin, 12px);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+@keyframes balloon-bob {
+  50% { transform: translateY(-4px) rotate(-1.5deg); }
+}
+
+/* Past four fifths full it starts to look worried, and you can hear it too. */
+.balloon.is-straining .balloon-svg {
+  animation: balloon-tremor .22s ease-in-out infinite;
+}
+
+.balloon.is-straining .balloon-label { color: var(--gold); }
+
+@keyframes balloon-tremor {
+  25%  { transform: translate(-1.5px, 0) rotate(-1deg); }
+  75%  { transform: translate(1.5px, -1px) rotate(1deg); }
+}
+
+/* And past nineteen twentieths it is barely holding on. */
+.balloon.is-critical .balloon-svg {
+  animation: balloon-panic .09s linear infinite;
+}
+
+.balloon.is-critical .balloon-label {
+  color: var(--tricky-d);
+  animation: soft-pulse .5s ease-in-out infinite;
+}
+
+@keyframes balloon-panic {
+  0%   { transform: translate(-2.5px, 1px) rotate(-2deg); }
+  50%  { transform: translate(2.5px, -2px) rotate(2deg); }
+  100% { transform: translate(-2px, 0) rotate(-1deg); }
+}
+
+/* The moment. One hard swell, then gone. */
+.balloon.is-popping .balloon-svg { animation: none; }
+
+.balloon.is-popping .balloon-body {
+  animation: balloon-burst .9s cubic-bezier(.3, 1.2, .5, 1) forwards;
+}
+
+@keyframes balloon-burst {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  62%  { transform: scale(1.1); }
+  78%  { transform: scale(1.55); opacity: 1; }
+  82%  { transform: scale(2.1); opacity: 0; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+.balloon.is-popped .balloon-svg { opacity: 0; }
+
+/* --------------------------------------------------------------------------
+   Puffs — what the word in front of her is worth right now
+   -------------------------------------------------------------------------- */
+
+/* Holds the word and the little pile of what it is worth, so the pile can be
+   positioned against the word rather than against the whole column. */
+.word-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.puffs {
+  position: absolute;
+  /* Sat just above the right-hand end of the word, so it reads as belonging
+     to the word rather than floating in the page. */
+  bottom: 100%;
+  right: clamp(6px, 3vw, 26px);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: clamp(3px, 0.8vmin, 6px);
+  min-height: 22px;
+  pointer-events: none;
+}
+
+/* Says what the dots are, once, quietly. */
+.puffs::before {
+  content: "worth";
+  margin-right: 4px;
+  font-size: clamp(9px, 2.1vmin, 11px);
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.puffs:empty::before { content: none; }
+
+.puff {
+  width: clamp(11px, 2.6vmin, 17px);
+  height: clamp(11px, 2.6vmin, 17px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%,
+              var(--balloon-stretch), var(--balloon-skin) 70%);
+  box-shadow: 0 0 0 2px rgba(255, 84, 112, .2);
+}
+
+.puff.is-new { animation: puff-in .34s cubic-bezier(.2, 1.6, .4, 1); }
+
+@keyframes puff-in {
+  from { transform: scale(0); opacity: 0; }
+}
+
+/* A wrong letter costs one, and she watches it go. */
+.puff.is-lost { animation: puff-lost .42s ease-out forwards; }
+
+@keyframes puff-lost {
+  40%  { transform: scale(1.4); opacity: .9; }
+  100% { transform: scale(0) translateY(10px); opacity: 0; }
+}
+
+/* On the way to the balloon. Fixed to the viewport so nothing can clip it. */
+.puff-flight {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  transition: transform .62s cubic-bezier(.4, 0, .3, 1), opacity .62s ease-in;
+}
+
+/* --------------------------------------------------------------------------
+   The reward
+   -------------------------------------------------------------------------- */
+
+.overlay-reward { padding: 12px; }
+
+.reward-panel {
+  width: min(100%, 900px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.reward-title {
+  margin: 0;
+  font-family: var(--font-letters);
+  font-size: clamp(38px, 11vmin, 78px);
+  line-height: .95;
+  color: var(--gold);
+  text-align: center;
+  animation: pop-in .45s cubic-bezier(.2, 1.7, .4, 1);
+}
+
+.reward-sub {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: clamp(13px, 3vmin, 18px);
+  font-weight: 700;
+  color: var(--ink-soft);
+  letter-spacing: .01em;
+}
+
+.reward-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #000;
+  box-shadow: var(--shadow-soft);
+}
+
+.reward-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.reward-party {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.party-balloons {
+  display: flex;
+  gap: clamp(6px, 2vmin, 16px);
+  font-size: clamp(38px, 12vmin, 84px);
+  line-height: 1;
+}
+
+.party-balloons span {
+  animation: party-float 2.4s ease-in-out infinite;
+}
+
+.party-balloons span:nth-child(2) { animation-delay: -.4s; }
+.party-balloons span:nth-child(3) { animation-delay: -.8s; }
+.party-balloons span:nth-child(4) { animation-delay: -1.2s; }
+.party-balloons span:nth-child(5) { animation-delay: -1.6s; }
+
+@keyframes party-float {
+  50% { transform: translateY(-14px) rotate(6deg); }
+}
+
+/* --------------------------------------------------------------------------
+   Motion
+   -------------------------------------------------------------------------- */
+
+.calm .balloon-svg,
+.calm .party-balloons span { animation: none; }
+
+.calm .balloon.is-critical .balloon-svg,
+.calm .balloon.is-straining .balloon-svg { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .balloon-svg,
+  .balloon.is-straining .balloon-svg,
+  .balloon.is-critical .balloon-svg,
+  .puff.is-new,
+  .party-balloons span {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The practice log, in Settings
+   -------------------------------------------------------------------------- */
+
+.logbook {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 2px solid var(--surface-line);
+  text-align: left;
+}
+
+.logbook-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.logbook-note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--ink-faint);
+  line-height: 1.45;
+}
+
+.logbook-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.logbook-field input {
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--surface-line);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.logbook-field input:focus {
+  outline: none;
+  border-color: var(--nudge);
+}
