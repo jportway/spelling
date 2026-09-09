@@ -436,21 +436,23 @@
       </li>
     </ul>
 
-    <!-- For whoever is keeping an eye on how she is getting on. The upload
-         address is typed in here rather than committed to the repository:
-         the site is public, and an address in it would be an open endpoint
-         for anyone who found it. -->
+    <!-- For whoever is keeping an eye on how she is getting on. There is no
+         address to type in any more: the log goes to the Firestore project
+         named in js/logbook.js. This switch is how to stop it leaving the
+         iPad at all - the log still gets kept, and can still be downloaded. -->
     <div class="logbook">
       <h3 class="logbook-title">Practice log</h3>
       <p class="logbook-note">
         Every word and every letter she tries, kept on this device.
         <strong id="logbookCount">0</strong> waiting to be sent.
       </p>
-      <label class="logbook-field">
-        <span>Send to</span>
-        <input type="url" id="logbookEndpoint" spellcheck="false"
-               autocomplete="off" autocapitalize="off"
-               placeholder="https://script.google.com/… (optional)">
+      <label class="switch">
+        <input type="checkbox" id="setUploadLog" checked>
+        <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+        <span class="switch-text">
+          <strong>Upload practice log</strong>
+          <small>Send it up whenever there is a network</small>
+        </span>
       </label>
       <button class="link-btn" id="logbookExportBtn" type="button">Download the log instead</button>
     </div>

@@ -15,7 +15,13 @@
    Storage is local first and always. The queue in localStorage is the real
    copy; uploading is a drain on it, not a destination, which is what makes
    an iPad on a train work exactly like one at home. Records only leave the
-   queue once a server has actually acknowledged them.
+   queue once Firestore has actually acknowledged them.
+
+   Uploading goes straight to Firestore's REST API - no server, no endpoint to
+   stand up, and no Firebase SDK, which would be a hundred kilobytes of
+   dependency used once a round by a game that is otherwise entirely offline.
+   The only thing that ever ships is this file, through the same build as the
+   rest of the site.
 
    Nothing in here may ever break the game. Every entry point swallows its
    own errors: a full disk or a blocked cookie jar costs a log line, not a
@@ -28,11 +34,24 @@
   var QUEUE_KEY = "cooper.logbook.v1";
   var DEVICE_KEY = "cooper.logbook.device";
 
-  /* Where to send them. Deliberately not in this file: the site is public, so
-     a URL committed here would be an open endpoint for anyone who found it.
-     It is pasted in once on her iPad instead, from Settings, and lives only
-     in that browser. */
-  var ENDPOINT_KEY = "cooper.logbook.endpoint";
+  /* Counts every record this device has ever made. It has to outlive the
+     queue, because the queue drains: device + n is what makes a re-sent batch
+     land on the documents it already wrote instead of duplicating them. */
+  var SEQ_KEY = "cooper.logbook.seq";
+
+  /* ----------------------------------------------------------------------
+     Where the logs go. Both of these are safe to have in a public repository:
+     Google documents the browser config as non-secret. They name the project;
+     they do not grant anything. The security boundary is entirely the
+     Firestore rules, which are in firestore.rules next to this file - create
+     and update only, shape checked, no reading anything back.
+
+     Leave PROJECT_ID empty and nothing is ever uploaded. The log still
+     collects locally and the download button still works.
+     ---------------------------------------------------------------------- */
+  var PROJECT_ID = "";
+  var API_KEY = "";
+  var COLLECTION = "logs";
 
   /* About 300 KB of records at roughly 250 bytes each, well inside the 5 MB
      localStorage gives us, and months of play. Oldest go first if it ever
@@ -44,6 +63,7 @@
 
   var queue = [];
   var device = "";
+  var seq = 0;
   var round = null;
   var current = null;   // the word in progress
   var lastAt = 0;
@@ -84,8 +104,55 @@
     record.d = device;
     record.r = round;
     record.t = Date.now();
+    record.n = ++seq;
+    write(SEQ_KEY, String(seq));
+
     queue.push(record);
     save();
+  }
+
+  /* Firestore does not take plain JSON. Every value has to say what type it
+     is - {"stringValue": "cat"} rather than "cat" - so this walks a record
+     and puts the labels on. */
+  function encode(v) {
+    if (v === null || v === undefined) return { nullValue: null };
+    if (typeof v === "boolean") return { booleanValue: v };
+
+    if (typeof v === "number") {
+      if (!isFinite(v)) return { nullValue: null };
+      // Integers go as strings: Firestore's integerValue is a 64 bit type and
+      // JSON numbers cannot carry one safely.
+      return v % 1 === 0
+        ? { integerValue: String(v) }
+        : { doubleValue: v };
+    }
+
+    if (Array.isArray(v)) {
+      var values = [];
+      for (var i = 0; i < v.length; i++) values.push(encode(v[i]));
+      return { arrayValue: { values: values } };
+    }
+
+    if (typeof v === "object") return { mapValue: { fields: encodeFields(v) } };
+    return { stringValue: String(v) };
+  }
+
+  function encodeFields(obj) {
+    var out = {};
+    for (var key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        out[key] = encode(obj[key]);
+      }
+    }
+    return out;
+  }
+
+  /* The document a record belongs in. Deterministic on purpose: if an upload
+     lands but the reply is lost on the way back, the retry writes over the
+     same documents rather than a second copy of them. */
+  function documentPath(record) {
+    return "projects/" + PROJECT_ID + "/databases/(default)/documents/" +
+           COLLECTION + "/" + record.d + "_" + record.n;
   }
 
   function makeId(prefix) {
@@ -93,7 +160,11 @@
   }
 
   var Logbook = {
+    /* Recording happens whatever: it is local, it is small, and it is what
+       the download button has to offer. Uploading is the part with a switch
+       on it, under Settings. */
     enabled: true,
+    uploading: true,
 
     init: function () {
       try {
@@ -103,6 +174,7 @@
         queue = [];
       }
 
+      seq = parseInt(read(SEQ_KEY), 10) || 0;
       device = read(DEVICE_KEY) || "";
       if (!device) {
         // A random id for the iPad, so rounds can be told apart. Not her
@@ -114,17 +186,6 @@
       // Anything left over from last time goes as soon as there is a network.
       global.addEventListener("online", function () { Logbook.flush(); });
       this.flush();
-    },
-
-    endpoint: function (url) {
-      if (url === undefined) return read(ENDPOINT_KEY) || "";
-      if (url) write(ENDPOINT_KEY, url);
-      else {
-        try {
-          global.localStorage.removeItem(ENDPOINT_KEY);
-        } catch (err) { /* nothing to do */ }
-      }
-      return url || "";
     },
 
     startRound: function (meta) {
@@ -193,25 +254,39 @@
       this.flush();
     },
 
-    /* Send what we can. Records stay in the queue until a server has said it
-       has them, so a failed upload costs nothing but a retry. */
+    /* Send what we can, as one atomic commit. Records stay in the queue until
+       Firestore has said it has them, so a failed upload costs a retry and
+       nothing else. */
     flush: function () {
-      var url = this.endpoint();
-      if (!url || sending || !queue.length) return;
+      if (!this.uploading || !PROJECT_ID || !API_KEY) return;
+      if (sending || !queue.length) return;
       if (global.navigator && global.navigator.onLine === false) return;
       if (typeof global.fetch !== "function") return;
 
       sending = true;
       var batch = queue.slice(0, BATCH);
 
-      // text/plain on purpose: anything else triggers a CORS preflight, and
-      // a Google Apps Script web app redirects, which preflight will not
-      // follow. This is the one content type that gets through.
-      global.fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ v: 1, device: device, records: batch })
-      }).then(function (response) {
+      var writes = [];
+      for (var i = 0; i < batch.length; i++) {
+        writes.push({
+          update: {
+            name: documentPath(batch[i]),
+            fields: encodeFields(batch[i])
+          }
+        });
+      }
+
+      // One commit for the whole batch: it either all lands or none of it
+      // does, so there is never a half-written batch to reason about.
+      global.fetch(
+        "https://firestore.googleapis.com/v1/projects/" + PROJECT_ID +
+        "/databases/(default)/documents:commit?key=" + encodeURIComponent(API_KEY),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ writes: writes })
+        }
+      ).then(function (response) {
         sending = false;
         if (!response || !response.ok) return;
 
@@ -219,7 +294,7 @@
         save();
         if (queue.length) Logbook.flush();
       })["catch"](function () {
-        // Offline, blocked, or the endpoint is wrong. Try again next time.
+        // Offline, blocked, or misconfigured. Try again next time.
         sending = false;
       });
     },
@@ -244,7 +319,12 @@
       return queue.length;
     },
 
-    /* Exposed for the tests. */
+    /* Exposed for the tests, and for checking a fresh install is pointed
+       somewhere before wondering why nothing is arriving. */
+    target: function () {
+      return PROJECT_ID ? PROJECT_ID + "/" + COLLECTION : "";
+    },
+
     peek: function () {
       return queue.slice();
     },

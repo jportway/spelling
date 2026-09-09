@@ -252,25 +252,75 @@ anticipate.
 **localStorage first, and always.** The queue on her iPad is the real copy;
 uploading drains it. That is what makes a tablet on a train behave exactly
 like one at home, and it means logging works today with nothing set up at all.
-Records only leave the queue once a server has actually acknowledged them, so
+Records only leave the queue once Firestore has actually acknowledged them, so
 a failed upload costs a retry and nothing else.
 
-Under **Settings → Practice log** there is a box for an upload address and a
-button that downloads the lot as JSON. With no address set, the download is
-the whole mechanism.
+Under **Settings → Practice log** there is a switch for uploading and a button
+that downloads the lot as JSON. With the project unset — which is how this
+ships — the download is the whole mechanism.
 
-If you want it uploading, a **Google Apps Script web app writing to a Sheet**
-is the easiest thing that works: no server, no API key, free, and it lands
-directly in the thing you want to chart. The one gotcha is baked into the
-code already — the upload posts as `text/plain`, because anything else
-triggers a CORS preflight that Apps Script's redirect will not survive.
+Uploading goes **straight from the browser to Firestore's REST API**. There is
+no server, no endpoint to stand up and no Firebase SDK, which would be a
+hundred kilobytes of dependency used once a round by a game that is otherwise
+entirely offline. The only thing that ever deploys is this static site,
+through the same Pages build as everything else: change the logging code,
+push, done.
 
-**The address is not in this repository, on purpose.** The site is public, so
-a URL committed here would be an open endpoint for anyone who found it. It is
-typed into Settings once, on her iPad, and lives only in that browser.
+Not Bigtable, which bills for provisioned nodes whether you use them or not —
+several hundred a month, for a child's spelling log. Firestore's free tier is
+20,000 writes a day and a round is about thirty records, so that is roughly
+600 rounds a day before anything costs anything.
 
-Nothing in the log identifies a person: a random id for the device, and no
+**Document ids are `<device>_<n>`**, where `n` counts every record that device
+has ever made. So if an upload lands but the reply is lost on the way back,
+the retry writes over the same documents instead of a second copy of them.
+Idempotency falls out of the naming rather than needing a mechanism.
+
+### Setting up the Firestore project
+
+Once, in a browser, about three minutes. Everything after this is code.
+
+1. [console.firebase.google.com](https://console.firebase.google.com) → add a
+   project. **Stay on the free Spark plan** — see the cost note below. Give it
+   a name that is not your child's: the project id ends up in this public
+   repository.
+2. **Build → Firestore Database → Create database**, production mode.
+3. **Rules** tab → paste [`firestore.rules`](firestore.rules) → Publish.
+4. **Project settings → Your apps → Web** → copy `projectId` and `apiKey` into
+   the two constants at the top of `js/logbook.js`, then rebuild the
+   standalone files (`python3 tools/build_standalone.py`) and push.
+
+To read the log back, use the console, or the REST API with an owner
+credential — the rules deny reads to the key in the repository, so nothing
+short of a real credential can get at it.
+
+### Security, plainly
+
+The `projectId` and `apiKey` in `js/logbook.js` are public, and that is fine:
+[Google documents the browser config as non-secret](https://firebase.google.com/docs/projects/api-keys).
+They name the project; they do not grant anything. The whole boundary is
+`firestore.rules`, which allows create and update on `logs/{id}` with a size
+and shape check, insists the document id matches the record inside it, and
+denies read and delete outright.
+
+**What that means honestly:** anyone who reads this repository can write
+documents into that collection. The rules constrain the shape and size of what
+they write, not who writes it. They cannot read anything back, list what is
+there, or delete any of it — so the realistic worst case is junk rows to
+filter out, not a leak. If you want the bar higher than shape-checked,
+anonymous auth through the REST identity endpoint is about fifteen more lines.
+
+**Cost: stay on Spark.** On the free plan an abuse spike just fails the writes
+and the client keeps queueing. On Blaze it would bill you.
+
+**Nothing in the log identifies a person**: a random id for the device, and no
 name.
+
+The rules are tested rather than hoped at. `python3 tools/check_rules.py`
+drives them against the Firestore emulator with the records the game really
+sends, and checks that a round commits, that resending it does not duplicate
+anything, that reads, listings and deletes are refused, and that oversized or
+mis-filed records bounce.
 
 ## How they help with b, d, p, q, n and m
 
@@ -463,8 +513,10 @@ data/words.js           generated — the word list and its grades, loaded first
 data/definitions.js     generated — the meanings, loaded in the background
 wordbuilder.html        generated — the word game as one file
 missingletters.html     generated — missing letters as one file
+firestore.rules         who may write to the log, and what it must look like
 tools/build_dictionary.py
 tools/build_standalone.py
+tools/check_rules.py    drives firestore.rules against the emulator
 tools/grade_words.py    how hard is this word to spell, and to know?
 tools/kid_definitions.txt
 tools/kid_words.txt     childhood vocabulary the frequency data undervalues
