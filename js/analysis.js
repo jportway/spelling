@@ -79,20 +79,68 @@
     };
   }
 
+  /* The normal quantile, by Acklam's rational approximation.
+
+     Needed because 95% is the right bar for one question and the wrong one for
+     six. This page shows a verdict for each of six tricky letters and for
+     every confusion pair; at one-in-twenty each, something will be flagged as
+     "measurably worse" almost every time somebody looks, purely by chance. A
+     parent reading that about their child would act on it. So the family of
+     per-letter verdicts is held to a bar divided by how many are being asked
+     at once, which is what stops the page crying wolf. */
+  function zFor(p) {
+    var a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+             1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+    var b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+             6.680131188771972e+01, -1.328068155288572e+01];
+    var c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+             -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+    var d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
+             3.754408661907416e+00];
+    var lo = 0.02425, q, r;
+
+    if (p <= 0) return -Infinity;
+    if (p >= 1) return Infinity;
+
+    if (p < lo) {
+      q = Math.sqrt(-2 * Math.log(p));
+      return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+             ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+    }
+    if (p > 1 - lo) {
+      q = Math.sqrt(-2 * Math.log(1 - p));
+      return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+              ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+    }
+    q = p - 0.5;
+    r = q * q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q /
+           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+  }
+
+  /* The bar for one of `family` questions asked together. */
+  function zForFamily(family) {
+    var m = Math.max(1, family || 1);
+    return zFor(1 - 0.05 / (2 * m));
+  }
+
   /* Newcombe's hybrid-score interval for the difference between two rates.
      Built out of the two Wilson intervals rather than a pooled normal
      approximation, for the same reason: small numbers. */
-  function difference(k1, n1, k2, n2) {
+  function difference(k1, n1, k2, n2, z) {
     if (!n1 || !n2) return { delta: null, lo: -1, hi: 1 };
 
-    var a = wilson(k1, n1);
-    var b = wilson(k2, n2);
+    var a = wilson(k1, n1, z);
+    var b = wilson(k2, n2, z);
     var delta = b.rate - a.rate;
 
     var down = Math.sqrt(Math.pow(a.rate - a.lo, 2) + Math.pow(b.hi - b.rate, 2));
     var up   = Math.sqrt(Math.pow(a.hi - a.rate, 2) + Math.pow(b.rate - b.lo, 2));
 
-    return { delta: delta, lo: delta - down, hi: delta + up, before: a, after: b };
+    return {
+      delta: delta, lo: delta - down, hi: delta + up,
+      before: a, after: b, z: z || 1.96
+    };
   }
 
   /* What a before-and-after comparison is allowed to claim. The wording is
@@ -437,10 +485,10 @@
      practice on each side, whenever it happened. Splitting on the calendar
      puts a fortnight's holiday in one bucket and three rounds in the other,
      then reports the difference as progress. */
-  function progress(attempts, pick, hit) {
+  function progress(attempts, pick, hit, family) {
     var chosen = firstAttempts(attempts).filter(pick);
     if (chosen.length < 2) {
-      return { cmp: null, say: verdict(null), n: chosen.length };
+      return { cmp: null, say: verdict(null), n: chosen.length, family: family || 1 };
     }
 
     var half = Math.floor(chosen.length / 2);
@@ -451,8 +499,9 @@
       return rows.reduce(function (n, a) { return n + (hit(a) ? 1 : 0); }, 0);
     };
 
-    var cmp = difference(count(early), early.length, count(late), late.length);
-    return { cmp: cmp, say: verdict(cmp), n: chosen.length };
+    var cmp = difference(count(early), early.length, count(late), late.length,
+                         zForFamily(family));
+    return { cmp: cmp, say: verdict(cmp), n: chosen.length, family: family || 1 };
   }
 
   /* Her first few rounds against her most recent few.
@@ -469,7 +518,7 @@
      So: the ends, plainly labelled as the ends. Fewer attempts, so a wider
      interval, but far more contrast. Where the two disagree the page says so
      rather than picking whichever reads better. */
-  function bookends(attempts, rounds, pick, hit) {
+  function bookends(attempts, rounds, pick, hit, family) {
     var span = Math.max(3, Math.round(rounds.length * 0.2));
     if (rounds.length < 6) return { enough: false, span: span };
 
@@ -485,10 +534,11 @@
       return rows.reduce(function (n, a) { return n + (hit(a) ? 1 : 0); }, 0);
     };
 
-    var cmp = difference(count(early), early.length, count(late), late.length);
+    var cmp = difference(count(early), early.length, count(late), late.length,
+                         zForFamily(family));
     return {
       enough: early.length >= MIN_PER_HALF && late.length >= MIN_PER_HALF,
-      span: span, cmp: cmp, say: verdict(cmp)
+      span: span, cmp: cmp, say: verdict(cmp), family: family || 1
     };
   }
 
@@ -955,27 +1005,31 @@
     /* One trend per tricky letter, and one per confusion pair worth
        following. Built here rather than on demand so the page has nothing
        left to work out. */
+    /* Six letters, each asked twice - across the halves and at the ends - so
+       twelve questions at once. The bar for calling any one of them moves
+       accordingly. */
+    var letterFamily = TRICKY.length * 2;
+
     model.letterTrends = TRICKY.map(function (letter) {
+      var isLetter = function (a) { return a.want === letter; };
+      var right = function (a) { return a.ok; };
       return {
         letter: letter,
-        series: overTime(attempts, rounds,
-          function (a) { return a.want === letter; },
-          function (a) { return a.ok; }),
-        progress: progress(attempts,
-          function (a) { return a.want === letter; },
-          function (a) { return a.ok; }),
-        bookends: bookends(attempts, rounds,
-          function (a) { return a.want === letter; },
-          function (a) { return a.ok; })
+        series: overTime(attempts, rounds, isLetter, right),
+        progress: progress(attempts, isLetter, right, letterFamily),
+        bookends: bookends(attempts, rounds, isLetter, right, letterFamily)
       };
     }).filter(function (t) { return t.series.length; });
 
     /* A pair is only in play when the losing letter was on the table, so the
        denominator is the offers, not every sighting of the target letter.
        Without a recorded pool we cannot tell, and those attempts sit out. */
-    model.pairTrends = model.confusion.pairs.filter(function (p) {
+    var candidates = model.confusion.pairs.filter(function (p) {
       return p.partner && p.n >= 3;
-    }).map(function (p) {
+    });
+    var pairFamily = Math.max(1, candidates.length);
+
+    model.pairTrends = candidates.map(function (p) {
       var inPlay = function (a) {
         return a.want === p.want && (!a.pool || a.pool.indexOf(p.got) >= 0);
       };
@@ -983,7 +1037,7 @@
       return {
         pair: p,
         series: overTime(attempts, rounds, inPlay, tookIt),
-        progress: progress(attempts, inPlay, tookIt)
+        progress: progress(attempts, inPlay, tookIt, pairFamily)
       };
     });
 
@@ -1005,6 +1059,7 @@
     difference: difference,
     verdict: verdict,
     sampleNeeded: sampleNeeded,
+    zForFamily: zForFamily,
     median: median,
     spread: spread,
     pct: pct,

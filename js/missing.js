@@ -1255,9 +1255,20 @@
       line.className += " is-ok";
       line.textContent = "Last upload worked " + agoText(info.last.at)
         + " (" + info.last.sent + " records).";
-      if (info.pending) {
+
+      var notes = [];
+      if (info.pending) notes.push(info.pending + " waiting since.");
+      if (info.repaired) {
+        notes.push(info.repaired + " older records were missing a serial "
+          + "number and have been given one.");
+      }
+      if (info.dropped) {
+        notes.push(info.dropped + " could not be sent in any form and were "
+          + "discarded so the rest could get through.");
+      }
+      if (notes.length) {
         line.appendChild(document.createElement("small"))
-            .textContent = info.pending + " waiting since.";
+            .textContent = notes.join(" ");
       }
       return;
     }

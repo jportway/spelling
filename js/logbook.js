@@ -81,6 +81,8 @@
   var lastAt = 0;
   var sending = false;
   var lastTry = null;
+  var repaired = 0;
+  var dropped = 0;
 
   function now() {
     return global.performance && global.performance.now
@@ -196,6 +198,62 @@
     return global.Promise ? global.Promise.resolve(value) : null;
   }
 
+  /* Does this record stand a chance of being accepted?
+
+     A local echo of the essentials in firestore.rules. It exists because the
+     commit is atomic: one record the rules will not have poisons the whole
+     batch, and if that record is at the head of the queue it poisons every
+     batch after it too, for ever. Being able to tell which record is the
+     problem is what turns a permanently wedged queue into a dropped line. */
+  function sendable(record) {
+    if (!record || typeof record !== "object") return false;
+    if (typeof record.d !== "string" || record.d.length < 3 || record.d.length > 24) return false;
+    if (typeof record.n !== "number" || record.n % 1 !== 0 || record.n <= 0) return false;
+    if (typeof record.t !== "number" || !isFinite(record.t)) return false;
+    if (typeof record.k !== "string" || record.k.length > 24) return false;
+
+    var keys = 0;
+    for (var key in record) {
+      if (Object.prototype.hasOwnProperty.call(record, key)) keys++;
+    }
+    if (keys > 16) return false;
+
+    if ("w" in record && (typeof record.w !== "string" || record.w.length > 32)) return false;
+    if ("h" in record && (!Array.isArray(record.h) || record.h.length > 16)) return false;
+    if ("p" in record && (!Array.isArray(record.p) || record.p.length > 16)) return false;
+    if ("tries" in record && (!Array.isArray(record.tries) || record.tries.length > 200)) return false;
+    return true;
+  }
+
+  /* Records written before sequence numbers existed have no `n`, so they can
+     never satisfy the rules and - because the commit is atomic - they stop
+     everything behind them getting out too. Anybody who played the version
+     before this one has a queue with some of these at the front of it.
+
+     Giving them a number now costs nothing: they are the oldest records this
+     device has, so numbering them below whatever comes next keeps the order
+     right and cannot collide. */
+  function migrate() {
+    var repaired = 0;
+
+    for (var i = 0; i < queue.length; i++) {
+      var record = queue[i];
+      if (!record || typeof record !== "object") continue;
+
+      if (!record.d) record.d = device;
+      if (typeof record.n !== "number" || record.n <= 0) {
+        record.n = ++seq;
+        repaired++;
+      }
+    }
+
+    if (repaired) {
+      write(SEQ_KEY, String(seq));
+      save();
+    }
+    return repaired;
+  }
+
   function makeId(prefix) {
     return prefix + Math.random().toString(36).slice(2, 10);
   }
@@ -223,6 +281,8 @@
         device = makeId("d_");
         write(DEVICE_KEY, device);
       }
+
+      repaired = migrate();
 
       try {
         lastTry = JSON.parse(read(STATUS_KEY) || "null");
@@ -369,6 +429,25 @@
         sending = false;
 
         if (!result.response.ok) {
+          /* Refused. If some of this batch could never have been accepted,
+             take those out and go again, so one bad record cannot hold the
+             whole queue hostage. Only records the local check can prove are
+             unsendable get dropped - anything else is a problem with the
+             rules or the configuration, and dropping data over that would be
+             hiding the fault rather than fixing it. */
+          if (result.response.status === 400 || result.response.status === 403) {
+            var bad = batch.filter(function (record) { return !sendable(record); });
+
+            if (bad.length) {
+              queue = queue.filter(function (record) {
+                return bad.indexOf(record) < 0;
+              });
+              dropped += bad.length;
+              save();
+              return Logbook.flush();
+            }
+          }
+
           return noteTry({
             ok: false, sent: 0, code: result.response.status,
             why: describe(result.response.status, result.body)
@@ -377,7 +456,10 @@
 
         queue = queue.slice(batch.length);
         save();
-        var done = noteTry({ ok: true, sent: batch.length, code: 200, why: "" });
+        var done = noteTry({
+          ok: true, sent: batch.length, code: 200, why: "",
+          repaired: repaired, dropped: dropped
+        });
 
         // More waiting? Keep going, and report the last outcome.
         return queue.length ? Logbook.flush() : done;
@@ -398,6 +480,8 @@
         uploading: this.uploading,
         target: PROJECT_ID ? PROJECT_ID + "/" + COLLECTION : "",
         device: device,
+        repaired: repaired,
+        dropped: dropped,
         last: lastTry
       };
     },

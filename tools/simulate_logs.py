@@ -108,7 +108,12 @@ def build_pool(rng: random.Random, word: str, holes: list[int]) -> list[str]:
     while len(pool) < size:
         pool.add(rng.choice(alphabet))
 
-    out = list(pool)
+    # sorted() before shuffling, not list(): iteration order over a set of
+    # strings depends on PYTHONHASHSEED, which is randomised per process, so
+    # list(pool) would make this generator produce different data on every run
+    # despite the fixed seed. A test fixture that is not reproducible is worse
+    # than no fixture - it reports a different answer each time it is asked.
+    out = sorted(pool)
     rng.shuffle(out)
     return out
 
