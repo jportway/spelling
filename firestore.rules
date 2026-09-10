@@ -72,6 +72,7 @@ service cloud.firestore {
                  (rec.r is string && rec.r.size() <= 24))
              && (!('w' in rec) || (rec.w is string && rec.w.size() <= 32))
              && (!('h' in rec) || (rec.h is list && rec.h.size() <= 16))
+             && (!('p' in rec) || (rec.p is list && rec.p.size() <= 16))
 
              // One round of stubbornness on one word, generously. Beyond this
              // it is not a child trying letters.

@@ -346,6 +346,90 @@ sends, and checks that a round commits, that resending it does not duplicate
 anything, that reads, listings and deletes are refused, and that oversized or
 mis-filed records bounce.
 
+## Reading the log
+
+`analytics.html` is the other half of the logging: open it, drop a log file on
+it, and it works out where the effort should go. It is a grown-up page, not
+linked from either game.
+
+```
+python3 tools/fetch_logs.py --out log.json     # pull it out of Firestore
+open analytics.html                             # drop log.json on the page
+```
+
+The fetch needs a real credential — `gcloud auth login`, or a service account
+key in `GOOGLE_APPLICATION_CREDENTIALS`. It cannot use the key in
+`js/logbook.js`, because the rules deny reads to that one on purpose. The page
+itself has no credentials and no network calls at all: the file you drop stays
+in the browser.
+
+To see the shape of it before she has played enough for the real one to say
+much, `python3 tools/simulate_logs.py --out fake.json` invents a term of
+practice with a known learning curve in it.
+
+### What it works out
+
+The confusion matrix and the swap table (which letter she reaches for, and how
+often, out of the times that letter was on offer), first-try accuracy per
+letter, trends per letter and per swap, the words that keep catching her,
+whether she is quicker than she was, whether hurrying costs her accuracy, and
+whether the trouble depends on where the letter sits in the word, how hard the
+word is, or how far into the round she has got. The top of the page is a short
+list of what to actually do about it.
+
+### Four decisions that shape every number on it
+
+**Only first attempts count.** When a letter goes in the wrong hole the tile
+falls back to the pile and she tries again — but now she knows one letter it is
+not. Counting that second guess alongside the first would quietly flatter her,
+so every accuracy figure is built from her first attempt at each hole. The
+later ones are kept and analysed separately as recovery.
+
+**Every rate carries its count and its interval.** A percentage from eleven
+attempts is barely information. Rates are shown with 95% Wilson intervals —
+which, unlike the textbook normal interval, stay inside 0–100% when she gets
+none or all of them right. Two letters whose intervals overlap have not been
+shown to differ, however far apart their percentages look. Where a question
+cannot be answered yet, the page says roughly how many more attempts it would
+take rather than only that there is not enough.
+
+**The game is part of the measurement.** She can only put a `d` where a `b`
+belongs if a `d` was on the table, and `js/puzzle.js` offers the partner about
+nine times in ten when the missing letter is tricky. So the word record now
+carries `p`, the letters she was offered, and swap rates are worked out over
+the times the wrong letter was actually there to pick. Records from before that
+change sit out of those particular figures rather than diluting them.
+
+**Progress is asked two ways, because they answer different questions.**
+Splitting her attempts in half uses every one of them and is the more powerful
+test, but it is blunt when the learning is front-loaded — a child who improves
+sharply in a fortnight and then holds steady has two halves that look alike.
+So her first few rounds are also compared with her most recent few: fewer
+attempts, wider intervals, far more contrast. Where the two disagree the page
+says so instead of quoting whichever reads better.
+
+### Whether it actually measures anything
+
+`tools/simulate_logs.py` builds a child whose letters improve on a curve the
+test knows, and the test checks the engine finds it — and, just as important,
+that it finds nothing when the same data is shuffled so there is no trend to
+find. A dashboard that reports progress in noise is worse than no dashboard,
+because it is about somebody's child.
+
+It also drives the statistics directly, on rates chosen by hand rather than
+simulated: a 25-point gain over 150 attempts a side is called, a 5-point
+wobble over 40 a side is not, and the interval on the difference covers the
+true value.
+
+### Known limits
+
+Times include the word being read aloud. Most words have one hole and she gets
+most of them first go, so nearly every timing is the opening move — which waits
+on the speech. That puts a floor of a couple of seconds under all of it. The
+trend still means something, because the speech costs the same every round, but
+the absolute number is not a thinking time. Logging the moment speech finishes
+would fix this properly.
+
 ## How they help with b, d, p, q, n and m
 
 **Each tricky letter has its own colour**, everywhere it appears — on the
@@ -537,10 +621,16 @@ data/words.js           generated — the word list and its grades, loaded first
 data/definitions.js     generated — the meanings, loaded in the background
 wordbuilder.html        generated — the word game as one file
 missingletters.html     generated — missing letters as one file
+analytics.html          the practice log, read back and made sense of
+css/analytics.css       its look
+js/analysis.js          the statistics: no DOM, so it can be tested in node
+js/analytics.js         the drawing: charts by hand, no libraries
 firestore.rules         who may write to the log, and what it must look like
 tools/build_dictionary.py
 tools/build_standalone.py
 tools/check_rules.py    drives firestore.rules against the emulator
+tools/fetch_logs.py     pulls the log out of Firestore for analytics.html
+tools/simulate_logs.py  invents a term of practice, to test the analysis
 tools/grade_words.py    how hard is this word to spell, and to know?
 tools/kid_definitions.txt
 tools/kid_words.txt     childhood vocabulary the frequency data undervalues

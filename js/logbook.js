@@ -196,7 +196,15 @@
       push({ k: "round-start", minutes: meta.minutes, game: "missing" });
     },
 
-    /* A word has appeared and the clock on her thinking starts now. */
+    /* A word has appeared and the clock on her thinking starts now.
+
+       `p` is the letters she was offered. Without it a count of "she put d
+       where a b belonged" measures the game as much as it measures her: the
+       generator puts the partner in the pool about nine times in ten when the
+       missing letter is tricky, so a raw substitution rate is conditional on
+       an offer that is not always made. With the pool recorded, the rate can
+       be worked out over the times the wrong letter was actually there to
+       pick. */
     word: function (info) {
       if (!this.enabled) return;
       current = {
@@ -205,6 +213,7 @@
         g: info.grade,
         lv: info.level,
         h: info.holes.slice(),
+        p: (info.pool || []).slice(),
         tries: []
       };
       lastAt = now();

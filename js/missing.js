@@ -879,7 +879,8 @@
       word: puzzle.word,
       grade: global.Dictionary.grade(puzzle.word),
       level: state.level,
-      holes: puzzle.holes
+      holes: puzzle.holes,
+      pool: puzzle.pool
     });
 
     dom.wordLine.classList.remove("is-solved", "is-wrapped");

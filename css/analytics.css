@@ -1,0 +1,439 @@
+/* ==========================================================================
+   analytics.css — the practice log, for whoever is helping her.
+
+   Not a children's page. It borrows the palette so the two feel related, but
+   everything else is different: dense, quiet, and built to be read rather
+   than played with. The six tricky letters keep their colours, because those
+   colours mean something specific everywhere else in this project.
+   ========================================================================== */
+
+:root {
+  --bg:            #151b33;
+  --bg-glow:       #1e2749;
+  --surface:       #1c2444;
+  --surface-2:     #232c50;
+  --surface-line:  #333e6d;
+
+  --ink:           #f4f6ff;
+  --ink-soft:      #b8c1e8;
+  --ink-faint:     #8590bd;
+  --ink-ghost:     #5b6591;
+
+  --go:            #34d399;
+  --gold:          #fbbf24;
+  --warn:          #fb8a5c;
+  --nudge:         #a5b4fc;
+
+  --tricky-b:      #4d9bff;
+  --tricky-d:      #ff9838;
+  --tricky-p:      #c07bff;
+  --tricky-q:      #3ddc84;
+  --tricky-n:      #ff7bac;
+  --tricky-m:      #2fd8d8;
+
+  --radius:        14px;
+  --font-ui:       system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-num:      ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-letters:  "Comic Sans MS", "Comic Neue", "Chalkboard SE",
+                   system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 20px 80px;
+  background:
+    radial-gradient(1100px 600px at 50% -10%, var(--bg-glow), transparent 70%),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+/* --------------------------------------------------------------------------
+   masthead and loading
+   -------------------------------------------------------------------------- */
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 34px 0 22px;
+}
+
+.top h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -.01em;
+}
+
+.top p {
+  margin: 4px 0 0;
+  color: var(--ink-faint);
+  font-size: 14px;
+  max-width: 62ch;
+}
+
+.load {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn {
+  appearance: none;
+  border: 2px solid var(--surface-line);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 11px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+
+.btn:hover { border-color: var(--nudge); background: var(--surface); }
+.btn:focus-visible { outline: 3px solid var(--nudge); outline-offset: 2px; }
+
+/* The whole page is a drop target; this is what says so. */
+.dropzone {
+  border: 2px dashed var(--surface-line);
+  border-radius: var(--radius);
+  padding: 46px 28px;
+  text-align: center;
+  color: var(--ink-faint);
+  background: rgba(28, 36, 68, .45);
+  transition: border-color .15s ease, background .15s ease;
+}
+
+.dropzone.is-over {
+  border-color: var(--go);
+  background: rgba(52, 211, 153, .08);
+  color: var(--ink);
+}
+
+.dropzone h2 { margin: 0 0 8px; color: var(--ink); font-size: 19px; }
+.dropzone code {
+  font-family: var(--font-num);
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  border-radius: 7px;
+  padding: 2px 7px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.dropzone .steps {
+  margin: 18px auto 0;
+  max-width: 52ch;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+.error {
+  border: 2px solid var(--warn);
+  background: rgba(251, 138, 92, .1);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  color: var(--ink);
+}
+
+/* --------------------------------------------------------------------------
+   sections and cards
+   -------------------------------------------------------------------------- */
+
+section { margin: 0 0 34px; }
+
+section > h2 {
+  margin: 0 0 4px;
+  font-size: 19px;
+  letter-spacing: -.01em;
+}
+
+section > .lede {
+  margin: 0 0 16px;
+  color: var(--ink-faint);
+  font-size: 14px;
+  max-width: 72ch;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+
+.cards { display: grid; gap: 14px; }
+.cards.two { grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); }
+
+/* The banner numbers: a handful of things worth knowing at a glance. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.tile .value {
+  font-size: 27px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.tile .label {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-top: 3px;
+}
+
+.tile .sub { color: var(--ink-soft); font-size: 13px; margin-top: 5px; }
+
+/* --------------------------------------------------------------------------
+   what to do about it
+   -------------------------------------------------------------------------- */
+
+.focus { display: grid; gap: 12px; }
+
+.focus-item {
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  border-left: 4px solid var(--nudge);
+  border-radius: var(--radius);
+  padding: 15px 18px;
+}
+
+.focus-item.is-letter  { border-left-color: var(--warn); }
+.focus-item.is-progress { border-left-color: var(--go); }
+.focus-item.is-words   { border-left-color: var(--gold); }
+.focus-item.is-pace    { border-left-color: var(--tricky-m); }
+.focus-item.is-none    { border-left-color: var(--ink-ghost); }
+
+.focus-item h3 { margin: 0 0 5px; font-size: 16.5px; }
+.focus-item p  { margin: 0; color: var(--ink-soft); font-size: 14px; }
+
+/* --------------------------------------------------------------------------
+   the letter table
+   -------------------------------------------------------------------------- */
+
+.letter-row {
+  display: grid;
+  grid-template-columns: 42px 78px 1fr 96px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--surface-line);
+}
+
+.letter-row:first-child { border-top: 0; }
+.letter-row.is-thin { opacity: .55; }
+
+.glyph {
+  font-family: var(--font-letters);
+  font-size: 25px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1;
+}
+
+.glyph[data-letter="b"] { color: var(--tricky-b); }
+.glyph[data-letter="d"] { color: var(--tricky-d); }
+.glyph[data-letter="p"] { color: var(--tricky-p); }
+.glyph[data-letter="q"] { color: var(--tricky-q); }
+.glyph[data-letter="n"] { color: var(--tricky-n); }
+.glyph[data-letter="m"] { color: var(--tricky-m); }
+
+.figure {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+
+.count { color: var(--ink-faint); font-size: 12.5px; }
+
+.note-inline { color: var(--ink-faint); font-size: 12.5px; }
+
+/* --------------------------------------------------------------------------
+   tables
+   -------------------------------------------------------------------------- */
+
+.scroller { overflow-x: auto; }
+
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+
+th, td {
+  text-align: left;
+  padding: 7px 12px 7px 0;
+  border-bottom: 1px solid var(--surface-line);
+  white-space: nowrap;
+}
+
+th {
+  color: var(--ink-faint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 700;
+}
+
+td.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding-right: 18px;
+}
+
+tr:last-child td { border-bottom: 0; }
+
+.word-cell { font-family: var(--font-letters); font-size: 16px; }
+
+.swap {
+  font-family: var(--font-letters);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--surface-line);
+  color: var(--ink-faint);
+}
+
+.tag.is-better { color: var(--go); border-color: rgba(52, 211, 153, .5); }
+.tag.is-worse  { color: var(--warn); border-color: rgba(251, 138, 92, .5); }
+.tag.is-partner { color: var(--gold); border-color: rgba(251, 191, 36, .5); }
+
+/* --------------------------------------------------------------------------
+   charts
+   -------------------------------------------------------------------------- */
+
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+
+.chart .axis  { stroke: var(--surface-line); stroke-width: 1; }
+.chart .grid  { stroke: var(--surface-line); stroke-width: 1; opacity: .45; }
+.chart .tick  { fill: var(--ink-ghost); font-size: 11px; font-family: var(--font-num); }
+.chart .band  { opacity: .18; }
+.chart .line  { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart .dot   { stroke: var(--surface); stroke-width: 1.5; }
+.chart .dot.is-thin { fill: var(--surface); stroke-width: 2; }
+.chart .label { fill: var(--ink-faint); font-size: 12px; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend i {
+  width: 15px; height: 3px; border-radius: 2px; display: inline-block;
+}
+
+/* Small multiples: one tiny chart per tricky letter. */
+.smalls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 12px;
+}
+
+.small {
+  background: var(--surface-2);
+  border: 1px solid var(--surface-line);
+  border-radius: 11px;
+  padding: 11px 12px 8px;
+}
+
+.small header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.small .glyph { font-size: 20px; text-align: left; }
+
+/* The confusion grid. */
+.matrix { border-collapse: separate; border-spacing: 3px; width: auto; }
+.matrix th, .matrix td { border: 0; padding: 0; white-space: nowrap; }
+
+.matrix th {
+  font-family: var(--font-letters);
+  font-size: 15px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 2px;
+}
+
+.matrix th.row-head { text-align: right; padding-right: 7px; }
+
+.cell {
+  width: 32px;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  text-align: center;
+  font-family: var(--font-num);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  line-height: 30px;
+}
+
+.cell.is-empty { color: var(--ink-ghost); background: rgba(35, 44, 80, .4); }
+.cell.is-partner { outline: 2px solid var(--gold); outline-offset: -2px; }
+.cell.is-self { background: transparent; color: var(--ink-ghost); }
+
+/* --------------------------------------------------------------------------
+   how to read it
+   -------------------------------------------------------------------------- */
+
+.notes { columns: 2 300px; column-gap: 26px; font-size: 13.5px; color: var(--ink-soft); }
+.notes p { margin: 0 0 12px; break-inside: avoid; }
+.notes strong { color: var(--ink); }
+
+.footnote { color: var(--ink-faint); font-size: 13px; margin-top: 10px; }
+
+[hidden] { display: none !important; }
+
+@media (max-width: 620px) {
+  .letter-row { grid-template-columns: 32px 66px 1fr; }
+  .letter-row > :nth-child(4) { display: none; }
+  .notes { columns: 1; }
+}
+
+@media print {
+  body { background: #fff; color: #111; }
+  .card, .tile, .focus-item, .small { border-color: #ccc; background: #fff; }
+  .load, .dropzone { display: none; }
+}
