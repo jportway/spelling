@@ -21,7 +21,7 @@ owner` is the emulator's admin escape hatch, used only to look at what landed
 - the game itself never sends it.
 """
 
-import base64, io, json, os, sys, urllib.error, urllib.request
+import base64, io, json, os, re, sys, urllib.error, urllib.request
 
 PID  = "spelling-logbook-test"
 EMU  = "http://127.0.0.1:8710"
@@ -122,7 +122,8 @@ print("\nwhat a signed-in reader can and cannot do:")
 # Republish the rules with one reader allowed, which is what the analytics
 # page asks you to paste in once you have signed in.
 READER = "a-reader-uid"
-with_reader = RULES.replace("      return [];", '      return ["%s"];' % READER)
+with_reader = re.sub(r"return \[[^\]]*\];",
+                     'return ["%s"];' % READER, RULES, count=1)
 assert with_reader != RULES, "readers() no longer looks the way this test expects"
 st, _ = req("PUT", EMU + "/emulator/v1/projects/%s:securityRules" % PID,
             {"rules": {"files": [{"name": "firestore.rules", "content": with_reader}]}})
@@ -147,8 +148,20 @@ check("the reader still cannot delete",
 st, _ = req("PUT", EMU + "/emulator/v1/projects/%s:securityRules" % PID,
             {"rules": {"files": [{"name": "firestore.rules", "content": RULES}]}})
 check("the shipped rules reload", st, 200)
-check("with readers() empty, a signed-in account cannot read either",
+check("an account not on the list cannot read, even signed in",
       req("GET", BASE + "/logs?pageSize=5", token=signed_in_as(READER))[0], 403)
+
+# And the list as it actually ships: whoever is really named in it can read.
+# This is the check that says the line pasted into the console works, rather
+# than that some invented uid works.
+shipped = re.findall(r'return \[([^\]]*)\];', RULES)
+named = re.findall(r'"([^"]+)"', shipped[0] if shipped else "")
+if named:
+    for uid in named:
+        check("the reader named in firestore.rules can read (%s…)" % uid[:8],
+              req("GET", BASE + "/logs?pageSize=5", token=signed_in_as(uid))[0], 200)
+else:
+    print("  %-52s %s" % ("readers() is empty, so nobody can read", "(by design)"))
 
 print("\nwhat the key must not be able to do:")
 check("read one back",  req("GET", BASE + "/logs/" + DEV + "_1")[0], 403)
