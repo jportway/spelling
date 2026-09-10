@@ -366,7 +366,9 @@ Three one-time steps in the Firebase console:
 2. **Authentication → Settings → Authorised domains** → add wherever you open
    the page from (`jportway.github.io`, and `localhost` if you run it locally).
 3. Sign in on the page, copy the `readers()` line it offers, paste it into
-   `firestore.rules`, publish.
+   `firestore.rules`, publish. The rules file in this repository is the source
+   of truth for what *should* be published — publishing it is a console step,
+   nothing here can do it for you, so the two can drift if you forget.
 
 **Or open a file instead.** Drag a JSON export onto the page — useful offline,
 or for a snapshot kept to one side. `python3 tools/fetch_logs.py --out log.json`

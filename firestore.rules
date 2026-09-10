@@ -47,16 +47,17 @@ service cloud.firestore {
 
     /* Who may read the practice log back.
 
-       Empty means nobody, which is deliberately where this starts. Nothing
-       that ships in the public repository can read the log, and adding a
-       reader is a decision somebody has to make on purpose.
+       This list starts empty, and empty means nobody: nothing that ships in
+       the public repository can read the log, and adding a reader has to be a
+       decision somebody makes on purpose.
 
        To add yourself: open analytics.html, press Sign in, and it will show
-       you your account id and the line to paste here. It is an opaque string
-       - it is not an email address, and it identifies nobody outside this
-       project. */
+       you your account id and the line to paste here. These are opaque
+       strings - not email addresses - and they identify nobody outside this
+       project. Being on this list grants reading and nothing else: writes are
+       still shape-checked and deletes are still refused. */
     function readers() {
-      return [];
+      return ["aTGmOegvisSBeAgoVsRrFOm1RNg2"];
     }
 
     function isReader() {
