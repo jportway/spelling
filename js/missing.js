@@ -879,7 +879,8 @@
       word: puzzle.word,
       grade: global.Dictionary.grade(puzzle.word),
       level: state.level,
-      holes: puzzle.holes
+      holes: puzzle.holes,
+      pool: puzzle.pool
     });
 
     dom.wordLine.classList.remove("is-solved", "is-wrapped");
@@ -1213,13 +1214,98 @@
     applyLetterHelper();
   }
 
+  function agoText(at) {
+    var seconds = Math.round((Date.now() - at) / 1000);
+    if (seconds < 60) return "just now";
+    if (seconds < 3600) return Math.round(seconds / 60) + " min ago";
+    if (seconds < 86400) return Math.round(seconds / 3600) + " hr ago";
+    return Math.round(seconds / 86400) + " days ago";
+  }
+
+  /* Say plainly whether the log is getting out. Everything here used to
+     happen invisibly, so a queue that never drained looked exactly like a
+     queue that had nothing in it. */
   function refreshLogbook() {
-    dom.logbookCount.textContent = global.Logbook.pending();
+    var info = global.Logbook.status();
+    dom.logbookCount.textContent = info.pending;
+
+    var line = dom.logbookStatus;
+    line.className = "logbook-status";
+    line.innerHTML = "";
+
+    if (!info.target) {
+      line.textContent = "No upload destination is set, so the log only lives "
+        + "on this device. The download button still works.";
+      return;
+    }
+    if (!info.uploading) {
+      line.textContent = "Uploading is switched off. " + info.pending
+        + " records are being kept here.";
+      return;
+    }
+
+    if (!info.last) {
+      line.textContent = info.pending
+        ? "Nothing sent yet. Tap Send now to try."
+        : "Nothing to send yet — play a round.";
+      return;
+    }
+
+    if (info.last.ok) {
+      line.className += " is-ok";
+      line.textContent = "Last upload worked " + agoText(info.last.at)
+        + " (" + info.last.sent + " records).";
+
+      var notes = [];
+      if (info.pending) notes.push(info.pending + " waiting since.");
+      if (info.repaired) {
+        notes.push(info.repaired + " older records were missing a serial "
+          + "number and have been given one.");
+      }
+      if (info.dropped) {
+        notes.push(info.dropped + " could not be sent in any form and were "
+          + "discarded so the rest could get through.");
+      }
+      if (notes.length) {
+        line.appendChild(document.createElement("small"))
+            .textContent = notes.join(" ");
+      }
+      return;
+    }
+
+    line.className += " is-bad";
+    line.textContent = "Last upload failed " + agoText(info.last.at) + ".";
+    var why = document.createElement("small");
+    why.textContent = info.last.why
+      + (info.last.detail ? " (" + info.last.detail + ")" : "");
+    line.appendChild(why);
   }
 
   function wireLogbook() {
     dom.logbookExportBtn.addEventListener("click", function () {
       global.Logbook.download();
+    });
+
+    dom.logbookSendBtn.addEventListener("click", function () {
+      var button = dom.logbookSendBtn;
+      button.disabled = true;
+      button.textContent = "Sending…";
+
+      var done = function (result) {
+        button.disabled = false;
+        button.textContent = "Send now";
+        refreshLogbook();
+
+        // A skipped attempt records nothing, so say why here instead.
+        if (result && result.ok === null) {
+          dom.logbookStatus.className = "logbook-status";
+          dom.logbookStatus.textContent = result.why;
+        }
+      };
+
+      var attempt = global.Logbook.flush();
+      if (attempt && attempt.then) attempt.then(done, function () { done(null); });
+      else done(null);
     });
   }
 
@@ -1463,7 +1549,8 @@
       "endScore", "endWords", "endFirstTime", "endTricky", "endNote",
       "wobblyBlock", "wobblyList", "missedBlock", "missedList", "againBtn",
       "homeBtn", "helpScreen", "helpCards", "helpCloseBtn", "settingsScreen",
-      "settingsCloseBtn", "logbookCount", "logbookExportBtn"
+      "settingsCloseBtn", "logbookCount", "logbookExportBtn",
+      "logbookStatus", "logbookSendBtn"
     ].forEach(function (id) {
       dom[id] = byId(id);
     });

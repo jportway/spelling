@@ -39,6 +39,13 @@
      land on the documents it already wrote instead of duplicating them. */
   var SEQ_KEY = "cooper.logbook.seq";
 
+  /* What happened last time we tried to send, kept so that Settings can show
+     it. Uploading used to fail in complete silence: the queue simply grew and
+     there was no way, short of a laptop and a debugger, to tell whether
+     anything was arriving. On a child's iPad that is not a diagnosis anybody
+     is going to make. */
+  var STATUS_KEY = "cooper.logbook.status";
+
   /* ----------------------------------------------------------------------
      Where the logs go. Both of these are safe to have in a public repository:
      Google documents the browser config as non-secret. They name the project;
@@ -62,6 +69,10 @@
   /* Upload in batches so one bad round cannot wedge the whole queue. */
   var BATCH = 60;
 
+  /* A round ending is the main trigger. This is the safety net: without it a
+     failure at the end of a round would sit until the end of the next one. */
+  var RETRY_MS = 4 * 60 * 1000;
+
   var queue = [];
   var device = "";
   var seq = 0;
@@ -69,6 +80,9 @@
   var current = null;   // the word in progress
   var lastAt = 0;
   var sending = false;
+  var lastTry = null;
+  var repaired = 0;
+  var dropped = 0;
 
   function now() {
     return global.performance && global.performance.now
@@ -156,6 +170,90 @@
            COLLECTION + "/" + record.d + "_" + record.n;
   }
 
+  function noteTry(result) {
+    result.at = Date.now();
+    lastTry = result;
+    write(STATUS_KEY, JSON.stringify(result));
+    return result;
+  }
+
+  /* Firestore's own words are accurate but not much help on a tablet, so each
+     failure gets a sentence saying what to do about it. */
+  function describe(code, body) {
+    var detail = "";
+    try {
+      var parsed = JSON.parse(body);
+      detail = (parsed.error && parsed.error.message) || "";
+    } catch (err) { /* not JSON; the code alone will have to do */ }
+
+    if (code === 0)   return "Could not reach Firestore - no network, or something is blocking it.";
+    if (code === 403) return "Firestore refused it. Usually the rules: check firestore.rules is published.";
+    if (code === 401) return "The key was rejected.";
+    if (code === 400) return "Firestore rejected the shape of a record. " + detail;
+    if (code === 429) return "Over the free daily quota. It will go through tomorrow.";
+    return "Firestore answered " + code + ". " + detail;
+  }
+
+  function settled(value) {
+    return global.Promise ? global.Promise.resolve(value) : null;
+  }
+
+  /* Does this record stand a chance of being accepted?
+
+     A local echo of the essentials in firestore.rules. It exists because the
+     commit is atomic: one record the rules will not have poisons the whole
+     batch, and if that record is at the head of the queue it poisons every
+     batch after it too, for ever. Being able to tell which record is the
+     problem is what turns a permanently wedged queue into a dropped line. */
+  function sendable(record) {
+    if (!record || typeof record !== "object") return false;
+    if (typeof record.d !== "string" || record.d.length < 3 || record.d.length > 24) return false;
+    if (typeof record.n !== "number" || record.n % 1 !== 0 || record.n <= 0) return false;
+    if (typeof record.t !== "number" || !isFinite(record.t)) return false;
+    if (typeof record.k !== "string" || record.k.length > 24) return false;
+
+    var keys = 0;
+    for (var key in record) {
+      if (Object.prototype.hasOwnProperty.call(record, key)) keys++;
+    }
+    if (keys > 16) return false;
+
+    if ("w" in record && (typeof record.w !== "string" || record.w.length > 32)) return false;
+    if ("h" in record && (!Array.isArray(record.h) || record.h.length > 16)) return false;
+    if ("p" in record && (!Array.isArray(record.p) || record.p.length > 16)) return false;
+    if ("tries" in record && (!Array.isArray(record.tries) || record.tries.length > 200)) return false;
+    return true;
+  }
+
+  /* Records written before sequence numbers existed have no `n`, so they can
+     never satisfy the rules and - because the commit is atomic - they stop
+     everything behind them getting out too. Anybody who played the version
+     before this one has a queue with some of these at the front of it.
+
+     Giving them a number now costs nothing: they are the oldest records this
+     device has, so numbering them below whatever comes next keeps the order
+     right and cannot collide. */
+  function migrate() {
+    var repaired = 0;
+
+    for (var i = 0; i < queue.length; i++) {
+      var record = queue[i];
+      if (!record || typeof record !== "object") continue;
+
+      if (!record.d) record.d = device;
+      if (typeof record.n !== "number" || record.n <= 0) {
+        record.n = ++seq;
+        repaired++;
+      }
+    }
+
+    if (repaired) {
+      write(SEQ_KEY, String(seq));
+      save();
+    }
+    return repaired;
+  }
+
   function makeId(prefix) {
     return prefix + Math.random().toString(36).slice(2, 10);
   }
@@ -184,8 +282,21 @@
         write(DEVICE_KEY, device);
       }
 
+      repaired = migrate();
+
+      try {
+        lastTry = JSON.parse(read(STATUS_KEY) || "null");
+      } catch (err) {
+        lastTry = null;
+      }
+
       // Anything left over from last time goes as soon as there is a network.
       global.addEventListener("online", function () { Logbook.flush(); });
+
+      /* And keep trying while the page is open, so a blip at the end of one
+         round does not wait for the end of the next. */
+      global.setInterval(function () { Logbook.flush(); }, RETRY_MS);
+
       this.flush();
     },
 
@@ -196,7 +307,15 @@
       push({ k: "round-start", minutes: meta.minutes, game: "missing" });
     },
 
-    /* A word has appeared and the clock on her thinking starts now. */
+    /* A word has appeared and the clock on her thinking starts now.
+
+       `p` is the letters she was offered. Without it a count of "she put d
+       where a b belonged" measures the game as much as it measures her: the
+       generator puts the partner in the pool about nine times in ten when the
+       missing letter is tricky, so a raw substitution rate is conditional on
+       an offer that is not always made. With the pool recorded, the rate can
+       be worked out over the times the wrong letter was actually there to
+       pick. */
     word: function (info) {
       if (!this.enabled) return;
       current = {
@@ -205,6 +324,7 @@
         g: info.grade,
         lv: info.level,
         h: info.holes.slice(),
+        p: (info.pool || []).slice(),
         tries: []
       };
       lastAt = now();
@@ -257,12 +377,24 @@
 
     /* Send what we can, as one atomic commit. Records stay in the queue until
        Firestore has said it has them, so a failed upload costs a retry and
-       nothing else. */
+       nothing else.
+
+       Returns a promise describing what happened, so that Settings can show
+       it and the "Send now" button can report a result rather than leaving
+       somebody watching a number that does not move. */
     flush: function () {
-      if (!this.uploading || !PROJECT_ID || !API_KEY) return;
-      if (sending || !queue.length) return;
-      if (global.navigator && global.navigator.onLine === false) return;
-      if (typeof global.fetch !== "function") return;
+      if (!this.uploading)
+        return settled({ ok: null, why: "Uploading is switched off." });
+      if (!PROJECT_ID || !API_KEY)
+        return settled({ ok: null, why: "No Firestore project is configured." });
+      if (sending)
+        return settled({ ok: null, why: "Already sending." });
+      if (!queue.length)
+        return settled({ ok: null, why: "Nothing waiting to send." });
+      if (global.navigator && global.navigator.onLine === false)
+        return settled({ ok: null, why: "This device says it is offline." });
+      if (typeof global.fetch !== "function")
+        return settled({ ok: null, why: "This browser cannot upload." });
 
       sending = true;
       var batch = queue.slice(0, BATCH);
@@ -279,7 +411,7 @@
 
       // One commit for the whole batch: it either all lands or none of it
       // does, so there is never a half-written batch to reason about.
-      global.fetch(
+      return global.fetch(
         "https://firestore.googleapis.com/v1/projects/" + PROJECT_ID +
         "/databases/(default)/documents:commit?key=" + encodeURIComponent(API_KEY),
         {
@@ -288,16 +420,70 @@
           body: JSON.stringify({ writes: writes })
         }
       ).then(function (response) {
+        return response.text().then(function (body) {
+          return { response: response, body: body };
+        }, function () {
+          return { response: response, body: "" };
+        });
+      }).then(function (result) {
         sending = false;
-        if (!response || !response.ok) return;
+
+        if (!result.response.ok) {
+          /* Refused. If some of this batch could never have been accepted,
+             take those out and go again, so one bad record cannot hold the
+             whole queue hostage. Only records the local check can prove are
+             unsendable get dropped - anything else is a problem with the
+             rules or the configuration, and dropping data over that would be
+             hiding the fault rather than fixing it. */
+          if (result.response.status === 400 || result.response.status === 403) {
+            var bad = batch.filter(function (record) { return !sendable(record); });
+
+            if (bad.length) {
+              queue = queue.filter(function (record) {
+                return bad.indexOf(record) < 0;
+              });
+              dropped += bad.length;
+              save();
+              return Logbook.flush();
+            }
+          }
+
+          return noteTry({
+            ok: false, sent: 0, code: result.response.status,
+            why: describe(result.response.status, result.body)
+          });
+        }
 
         queue = queue.slice(batch.length);
         save();
-        if (queue.length) Logbook.flush();
-      })["catch"](function () {
-        // Offline, blocked, or misconfigured. Try again next time.
+        var done = noteTry({
+          ok: true, sent: batch.length, code: 200, why: "",
+          repaired: repaired, dropped: dropped
+        });
+
+        // More waiting? Keep going, and report the last outcome.
+        return queue.length ? Logbook.flush() : done;
+      })["catch"](function (err) {
         sending = false;
+        return noteTry({
+          ok: false, sent: 0, code: 0,
+          why: describe(0, ""),
+          detail: String((err && err.message) || err)
+        });
       });
+    },
+
+    /* Everything Settings needs to say whether this is working. */
+    status: function () {
+      return {
+        pending: queue.length,
+        uploading: this.uploading,
+        target: PROJECT_ID ? PROJECT_ID + "/" + COLLECTION : "",
+        device: device,
+        repaired: repaired,
+        dropped: dropped,
+        last: lastTry
+      };
     },
 
     /* Everything, as a file, for when there is no endpoint at all - which is
