@@ -348,24 +348,32 @@ mis-filed records bounce.
 
 ## Reading the log
 
-`analytics.html` is the other half of the logging: open it, drop a log file on
-it, and it works out where the effort should go. It is a grown-up page, not
-linked from either game.
+`analytics.html` is the other half of the logging. Open it, press **Sign in
+and load**, and it reads the log straight out of Firestore and works out where
+the effort should go. It is a grown-up page, not linked from either game, and
+nothing on it can write.
 
-```
-python3 tools/fetch_logs.py --out log.json     # pull it out of Firestore
-open analytics.html                             # drop log.json on the page
-```
+**Reading needs an account the rules allow.** The key the game ships with
+cannot read anything back — that is the whole reason the log is not readable
+by anyone who views source — so `readers()` in `firestore.rules` names who
+may. It starts **empty**, which means nobody: adding a reader has to be a
+decision somebody makes on purpose. Sign in once and the page shows you the
+exact line to paste.
 
-The fetch needs a real credential — `gcloud auth login`, or a service account
-key in `GOOGLE_APPLICATION_CREDENTIALS`. It cannot use the key in
-`js/logbook.js`, because the rules deny reads to that one on purpose. The page
-itself has no credentials and no network calls at all: the file you drop stays
-in the browser.
+Three one-time steps in the Firebase console:
 
-To see the shape of it before she has played enough for the real one to say
-much, `python3 tools/simulate_logs.py --out fake.json` invents a term of
-practice with a known learning curve in it.
+1. **Authentication → Sign-in method → Google → Enable.**
+2. **Authentication → Settings → Authorised domains** → add wherever you open
+   the page from (`jportway.github.io`, and `localhost` if you run it locally).
+3. Sign in on the page, copy the `readers()` line it offers, paste it into
+   `firestore.rules`, publish.
+
+**Or open a file instead.** Drag a JSON export onto the page — useful offline,
+or for a snapshot kept to one side. `python3 tools/fetch_logs.py --out log.json`
+pulls the same data down with a `gcloud` or service-account credential, and
+`python3 tools/simulate_logs.py --out fake.json` invents a term of practice
+with a known learning curve in it, for seeing the shape of the thing before
+there is enough real data to say much.
 
 ### What it works out
 
@@ -420,6 +428,23 @@ It also drives the statistics directly, on rates chosen by hand rather than
 simulated: a 25-point gain over 150 attempts a side is called, a 5-point
 wobble over 40 a side is not, and the interval on the difference covers the
 true value.
+
+### Is it uploading?
+
+**Settings → Practice log** on the game itself says so plainly: when the last
+upload was, whether it worked, and if not, why — with a **Send now** button
+that reports a result rather than leaving a number that does not move. This
+used to happen in complete silence, which meant a queue that never drained
+looked exactly like a queue with nothing in it.
+
+The triggers are: the end of every round, page load, coming back online, and a
+four-minute retry while the page is open. Records only leave the queue once
+Firestore has acknowledged them, so nothing is lost by a failure.
+
+If nothing is arriving, the likely causes in order: she is playing the **word
+game**, which does not log; she is playing a **standalone file** downloaded
+before the logging went in, which has no project configured in it; or her iPad
+has not been online since. The status line distinguishes all three.
 
 ### Known limits
 
@@ -625,6 +650,7 @@ analytics.html          the practice log, read back and made sense of
 css/analytics.css       its look
 js/analysis.js          the statistics: no DOM, so it can be tested in node
 js/analytics.js         the drawing: charts by hand, no libraries
+js/livelog.js           signing in, and reading the log back out of Firestore
 firestore.rules         who may write to the log, and what it must look like
 tools/build_dictionary.py
 tools/build_standalone.py

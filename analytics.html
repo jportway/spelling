@@ -16,33 +16,55 @@
       <h1>Practice log</h1>
       <p>
         What she has actually been doing, and what it says about where to put
-        the effort next. Nothing is uploaded from this page — the file you
-        open stays in this browser.
+        the effort next. It reads the log straight out of Firestore; nothing
+        on this page ever writes to it.
       </p>
     </div>
     <div class="load">
+      <span class="who" id="who" hidden></span>
+      <button class="btn btn-go" id="liveBtn" type="button">Sign in and load</button>
+      <button class="btn" id="refreshBtn" type="button" hidden>Refresh</button>
       <input type="file" id="pick" accept="application/json,.json" hidden>
-      <button class="btn" id="pickBtn" type="button">Open a log file…</button>
+      <button class="btn" id="pickBtn" type="button">Open a file…</button>
     </div>
   </div>
 
   <div class="error" id="error" hidden></div>
 
   <div class="dropzone" id="dropzone">
-    <h2>Drop a log file here</h2>
-    <p>…or use the button above. It never leaves this browser.</p>
+    <h2>Sign in to read the log</h2>
+    <p id="dropLede">
+      The log lives in Firestore. Reading it needs an account the rules allow,
+      because the key the game ships with deliberately cannot read anything
+      back.
+    </p>
     <div class="steps">
-      <strong>To get one:</strong><br>
-      <code>python3 tools/fetch_logs.py --out log.json</code><br>
-      pulls everything from Firestore. It needs an owner credential, because
-      the rules deliberately refuse reads to the key the game ships with.
+      <strong>Or open a file instead</strong> — drop one here, or use the
+      button above. Useful offline, or for a snapshot kept to one side.
       <br><br>
-      <strong>To see what this looks like with data in it:</strong><br>
-      <code>python3 tools/simulate_logs.py --out fake.json</code><br>
-      invents a term of practice with a known learning curve in it. Useful for
-      seeing the shape of the thing before she has played enough for the real
-      one to say much.
+      <code>python3 tools/fetch_logs.py --out log.json</code>
+      pulls the same data down with a gcloud or service-account credential.
+      <br><br>
+      <code>python3 tools/simulate_logs.py --out fake.json</code>
+      invents a term of practice with a known learning curve in it, for seeing
+      the shape of the thing before there is enough real data to say much.
     </div>
+  </div>
+
+  <div class="needs-reader" id="needsReader" hidden>
+    <h2>Nearly there</h2>
+    <p>
+      You are signed in, but the rules do not let this account read the log
+      yet. That is the safe default: the list of readers starts empty so that
+      nothing in the public repository can read her practice log.
+    </p>
+    <p>Paste this into <code>firestore.rules</code>, and publish it in the Firebase console:</p>
+    <pre id="readerSnippet"></pre>
+    <p class="footnote">
+      That string is an opaque account id for this project alone. It is not an
+      email address and it identifies nobody outside it.
+    </p>
+    <button class="btn" id="retryBtn" type="button">Try again</button>
   </div>
 
   <div id="report" hidden>
@@ -209,6 +231,7 @@
 </div>
 
 <script src="js/analysis.js"></script>
+<script src="js/livelog.js"></script>
 <script src="js/analytics.js"></script>
 </body>
 </html>

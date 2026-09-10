@@ -139,6 +139,46 @@ body {
   line-height: 1.9;
 }
 
+.btn-go {
+  border-color: rgba(52, 211, 153, .55);
+  background: rgba(52, 211, 153, .12);
+}
+
+.who {
+  color: var(--ink-faint);
+  font-size: 13px;
+  margin-right: 4px;
+}
+
+/* Signed in, but not on the readers list yet. */
+.needs-reader {
+  border: 2px solid var(--gold);
+  background: rgba(251, 191, 36, .07);
+  border-radius: var(--radius);
+  padding: 22px 26px;
+}
+
+.needs-reader h2 { margin: 0 0 8px; font-size: 19px; }
+.needs-reader p  { margin: 0 0 12px; color: var(--ink-soft); max-width: 68ch; }
+
+.needs-reader pre {
+  background: var(--surface);
+  border: 1px solid var(--surface-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--font-num);
+  font-size: 13px;
+  color: var(--ink);
+  margin: 0 0 12px;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--ink-faint);
+}
+
 .error {
   border: 2px solid var(--warn);
   background: rgba(251, 138, 92, .1);

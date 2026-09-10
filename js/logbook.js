@@ -39,6 +39,13 @@
      land on the documents it already wrote instead of duplicating them. */
   var SEQ_KEY = "cooper.logbook.seq";
 
+  /* What happened last time we tried to send, kept so that Settings can show
+     it. Uploading used to fail in complete silence: the queue simply grew and
+     there was no way, short of a laptop and a debugger, to tell whether
+     anything was arriving. On a child's iPad that is not a diagnosis anybody
+     is going to make. */
+  var STATUS_KEY = "cooper.logbook.status";
+
   /* ----------------------------------------------------------------------
      Where the logs go. Both of these are safe to have in a public repository:
      Google documents the browser config as non-secret. They name the project;
@@ -62,6 +69,10 @@
   /* Upload in batches so one bad round cannot wedge the whole queue. */
   var BATCH = 60;
 
+  /* A round ending is the main trigger. This is the safety net: without it a
+     failure at the end of a round would sit until the end of the next one. */
+  var RETRY_MS = 4 * 60 * 1000;
+
   var queue = [];
   var device = "";
   var seq = 0;
@@ -69,6 +80,7 @@
   var current = null;   // the word in progress
   var lastAt = 0;
   var sending = false;
+  var lastTry = null;
 
   function now() {
     return global.performance && global.performance.now
@@ -156,6 +168,34 @@
            COLLECTION + "/" + record.d + "_" + record.n;
   }
 
+  function noteTry(result) {
+    result.at = Date.now();
+    lastTry = result;
+    write(STATUS_KEY, JSON.stringify(result));
+    return result;
+  }
+
+  /* Firestore's own words are accurate but not much help on a tablet, so each
+     failure gets a sentence saying what to do about it. */
+  function describe(code, body) {
+    var detail = "";
+    try {
+      var parsed = JSON.parse(body);
+      detail = (parsed.error && parsed.error.message) || "";
+    } catch (err) { /* not JSON; the code alone will have to do */ }
+
+    if (code === 0)   return "Could not reach Firestore - no network, or something is blocking it.";
+    if (code === 403) return "Firestore refused it. Usually the rules: check firestore.rules is published.";
+    if (code === 401) return "The key was rejected.";
+    if (code === 400) return "Firestore rejected the shape of a record. " + detail;
+    if (code === 429) return "Over the free daily quota. It will go through tomorrow.";
+    return "Firestore answered " + code + ". " + detail;
+  }
+
+  function settled(value) {
+    return global.Promise ? global.Promise.resolve(value) : null;
+  }
+
   function makeId(prefix) {
     return prefix + Math.random().toString(36).slice(2, 10);
   }
@@ -184,8 +224,19 @@
         write(DEVICE_KEY, device);
       }
 
+      try {
+        lastTry = JSON.parse(read(STATUS_KEY) || "null");
+      } catch (err) {
+        lastTry = null;
+      }
+
       // Anything left over from last time goes as soon as there is a network.
       global.addEventListener("online", function () { Logbook.flush(); });
+
+      /* And keep trying while the page is open, so a blip at the end of one
+         round does not wait for the end of the next. */
+      global.setInterval(function () { Logbook.flush(); }, RETRY_MS);
+
       this.flush();
     },
 
@@ -266,12 +317,24 @@
 
     /* Send what we can, as one atomic commit. Records stay in the queue until
        Firestore has said it has them, so a failed upload costs a retry and
-       nothing else. */
+       nothing else.
+
+       Returns a promise describing what happened, so that Settings can show
+       it and the "Send now" button can report a result rather than leaving
+       somebody watching a number that does not move. */
     flush: function () {
-      if (!this.uploading || !PROJECT_ID || !API_KEY) return;
-      if (sending || !queue.length) return;
-      if (global.navigator && global.navigator.onLine === false) return;
-      if (typeof global.fetch !== "function") return;
+      if (!this.uploading)
+        return settled({ ok: null, why: "Uploading is switched off." });
+      if (!PROJECT_ID || !API_KEY)
+        return settled({ ok: null, why: "No Firestore project is configured." });
+      if (sending)
+        return settled({ ok: null, why: "Already sending." });
+      if (!queue.length)
+        return settled({ ok: null, why: "Nothing waiting to send." });
+      if (global.navigator && global.navigator.onLine === false)
+        return settled({ ok: null, why: "This device says it is offline." });
+      if (typeof global.fetch !== "function")
+        return settled({ ok: null, why: "This browser cannot upload." });
 
       sending = true;
       var batch = queue.slice(0, BATCH);
@@ -288,7 +351,7 @@
 
       // One commit for the whole batch: it either all lands or none of it
       // does, so there is never a half-written batch to reason about.
-      global.fetch(
+      return global.fetch(
         "https://firestore.googleapis.com/v1/projects/" + PROJECT_ID +
         "/databases/(default)/documents:commit?key=" + encodeURIComponent(API_KEY),
         {
@@ -297,16 +360,46 @@
           body: JSON.stringify({ writes: writes })
         }
       ).then(function (response) {
+        return response.text().then(function (body) {
+          return { response: response, body: body };
+        }, function () {
+          return { response: response, body: "" };
+        });
+      }).then(function (result) {
         sending = false;
-        if (!response || !response.ok) return;
+
+        if (!result.response.ok) {
+          return noteTry({
+            ok: false, sent: 0, code: result.response.status,
+            why: describe(result.response.status, result.body)
+          });
+        }
 
         queue = queue.slice(batch.length);
         save();
-        if (queue.length) Logbook.flush();
-      })["catch"](function () {
-        // Offline, blocked, or misconfigured. Try again next time.
+        var done = noteTry({ ok: true, sent: batch.length, code: 200, why: "" });
+
+        // More waiting? Keep going, and report the last outcome.
+        return queue.length ? Logbook.flush() : done;
+      })["catch"](function (err) {
         sending = false;
+        return noteTry({
+          ok: false, sent: 0, code: 0,
+          why: describe(0, ""),
+          detail: String((err && err.message) || err)
+        });
       });
+    },
+
+    /* Everything Settings needs to say whether this is working. */
+    status: function () {
+      return {
+        pending: queue.length,
+        uploading: this.uploading,
+        target: PROJECT_ID ? PROJECT_ID + "/" + COLLECTION : "",
+        device: device,
+        last: lastTry
+      };
     },
 
     /* Everything, as a file, for when there is no endpoint at all - which is

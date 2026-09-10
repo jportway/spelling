@@ -649,3 +649,33 @@
 .logbook .switch {
   margin: 0 -10px 4px;
 }
+
+/* Whether it is actually working. This used to fail in silence. */
+.logbook-status {
+  margin: 4px 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+
+.logbook-status.is-ok    { color: var(--go); }
+.logbook-status.is-bad   { color: var(--nudge); }
+.logbook-status small {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.logbook-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.btn-small {
+  padding: 7px 14px;
+  font-size: 14px;
+  border-radius: 11px;
+}

@@ -29,9 +29,10 @@ service cloud.firestore {
 
     match /logs/{entry} {
 
-      /* Nothing comes back out this way. The log is read with an owner
-         credential from a console or a script, never by the game. */
-      allow read: if false;
+      /* Reading is for the analytics page, signed in as somebody named in
+         readers() below. The game's own key can never read: it is not signed
+         in as anybody, so isReader() is false for it no matter what. */
+      allow read: if isReader();
       allow delete: if false;
 
       allow create, update: if isRecord(request.resource.data)
@@ -42,6 +43,24 @@ service cloud.firestore {
        concerned. */
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    /* Who may read the practice log back.
+
+       Empty means nobody, which is deliberately where this starts. Nothing
+       that ships in the public repository can read the log, and adding a
+       reader is a decision somebody has to make on purpose.
+
+       To add yourself: open analytics.html, press Sign in, and it will show
+       you your account id and the line to paste here. It is an opaque string
+       - it is not an email address, and it identifies nobody outside this
+       project. */
+    function readers() {
+      return [];
+    }
+
+    function isReader() {
+      return request.auth != null && request.auth.uid in readers();
     }
 
     /* The id a record has to be filed under: device and sequence number, which

@@ -25,6 +25,9 @@
 
   var dom = {};
   var model = null;
+  var signedIn = null;
+  var source = "file";
+  var emptyState = "";
 
   var LETTER_COLOUR = {
     b: "#4d9bff", d: "#ff9838", p: "#c07bff",
@@ -349,7 +352,9 @@
            "includes hearing the word read out"),
       tile(when(span.from) === when(span.to) ? when(span.from)
              : when(span.from) + " – " + when(span.to), "practice logged",
-           span.devices > 1 ? span.devices + " devices" : null)
+           (source === "firestore" ? "live from " + global.LiveLog.project()
+                                   : "from a file")
+           + (span.devices > 1 ? ", " + span.devices + " devices" : ""))
     ].forEach(function (t) { dom.tiles.appendChild(t); });
 
     if (span.withPool < model.firsts.length) {
@@ -774,6 +779,7 @@
 
     dom.error.hidden = true;
     dom.dropzone.hidden = true;
+    dom.needsReader.hidden = true;
     dom.report.hidden = false;
 
     renderSummary();
@@ -793,10 +799,90 @@
     dom.error.hidden = false;
     dom.error.textContent = message;
     dom.report.hidden = true;
+    dom.needsReader.hidden = true;
+    restoreDropzone();
     dom.dropzone.hidden = false;
   }
 
+  /* Signed in, but nobody has added this account to readers() yet. Rather
+     than an error, show the exact line to paste - it is the one thing between
+     here and a working page, and it is thirty seconds of work. */
+  function askForReader(err) {
+    dom.error.hidden = true;
+    dom.report.hidden = true;
+    dom.dropzone.hidden = true;
+    dom.needsReader.hidden = false;
+    dom.readerSnippet.textContent =
+      "function readers() {\n  return [\"" + err.uid + "\"];\n}";
+  }
+
+  function busy(message) {
+    dom.error.hidden = true;
+    dom.needsReader.hidden = true;
+    dom.dropzone.hidden = false;
+    dom.dropzone.innerHTML = "";
+    dom.dropzone.appendChild(el("div", { "class": "loading", text: message }));
+  }
+
+  function showWho(user) {
+    signedIn = user;
+    dom.who.hidden = !user;
+    dom.who.textContent = user ? (user.email || "signed in") : "";
+    dom.liveBtn.textContent = user ? "Reload from Firestore" : "Sign in and load";
+    dom.refreshBtn.hidden = !user;
+  }
+
+  /* Pull everything out of Firestore and draw it. */
+  function loadLive() {
+    busy("Reading the log…");
+
+    return global.LiveLog.fetchAll(function (sofar) {
+      busy("Reading the log… " + sofar + " records");
+    }).then(function (records) {
+      if (!records.length) {
+        fail("The log in " + global.LiveLog.project() + " is empty. If she has "
+           + "played since logging went live, her iPad may not have been "
+           + "online since — the records are queued on the device until it is.");
+        return;
+      }
+      source = "firestore";
+      show(records);
+    })["catch"](function (err) {
+      if (err && err.needsReader) return askForReader(err);
+      fail(err && err.message ? err.message : String(err));
+    });
+  }
+
+  function signInAndLoad() {
+    if (!global.LiveLog.configured()) {
+      fail("No Firestore project is configured in this build.");
+      return;
+    }
+    dom.liveBtn.disabled = true;
+    busy("Waiting for the Google sign-in window…");
+
+    global.LiveLog.signIn().then(function (user) {
+      showWho(user);
+      return loadLive();
+    })["catch"](function (err) {
+      var message = String((err && err.message) || err);
+      if (/popup-closed|cancelled-popup/.test(message)) {
+        restoreDropzone();
+        dom.dropzone.hidden = false;
+      } else if (/auth\/operation-not-allowed/.test(message)) {
+        fail("Google sign-in is not switched on for this Firebase project yet: "
+           + "Authentication → Sign-in method → Google → Enable.");
+      } else if (/auth\/unauthorized-domain/.test(message)) {
+        fail("This address is not on the project's authorised domains: "
+           + "Authentication → Settings → Authorised domains.");
+      } else {
+        fail("Could not sign in. " + message);
+      }
+    }).then(function () { dom.liveBtn.disabled = false; });
+  }
+
   function readFile(file) {
+    source = "file";
     var reader = new FileReader();
     reader.onload = function () {
       try {
@@ -809,7 +895,18 @@
     reader.readAsText(file);
   }
 
+  function restoreDropzone() {
+    if (emptyState) dom.dropzone.innerHTML = emptyState;
+  }
+
   function wire() {
+    dom.liveBtn.addEventListener("click", function () {
+      if (signedIn) loadLive();
+      else signInAndLoad();
+    });
+    dom.refreshBtn.addEventListener("click", function () { loadLive(); });
+    dom.retryBtn.addEventListener("click", function () { loadLive(); });
+
     dom.pick.addEventListener("change", function () {
       if (dom.pick.files && dom.pick.files[0]) readFile(dom.pick.files[0]);
     });
@@ -838,10 +935,23 @@
     ["tiles", "poolNote", "focus", "letters", "matrixWrap", "pairs",
      "overallTrend", "overallVerdict", "smalls", "paceChart", "paceLegend",
      "paceVerdict", "rushing", "words", "positions", "stamina", "grades",
-     "report", "dropzone", "error", "pick", "pickBtn"].forEach(function (id) {
-      dom[id] = document.getElementById(id);
-    });
+     "report", "dropzone", "error", "pick", "pickBtn", "liveBtn",
+     "refreshBtn", "who", "needsReader", "readerSnippet", "retryBtn"]
+      .forEach(function (id) { dom[id] = document.getElementById(id); });
+
+    emptyState = dom.dropzone.innerHTML;
     wire();
+
+    /* Already signed in from last time? Then go straight to the data - being
+       made to press a button every visit to see the same thing is not a
+       security measure, it is friction. */
+    if (global.LiveLog && global.LiveLog.configured()) {
+      global.LiveLog.whoever().then(function (user) {
+        if (!user) return;
+        showWho(user);
+        loadLive();
+      });
+    }
   }
 
   if (document.readyState === "loading") {

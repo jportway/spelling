@@ -21,7 +21,7 @@ owner` is the emulator's admin escape hatch, used only to look at what landed
 - the game itself never sends it.
 """
 
-import io, json, os, sys, urllib.error, urllib.request
+import base64, io, json, os, sys, urllib.error, urllib.request
 
 PID  = "spelling-logbook-test"
 EMU  = "http://127.0.0.1:8710"
@@ -29,11 +29,31 @@ BASE = EMU + "/v1/projects/%s/databases/(default)/documents" % PID
 HERE  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RULES = io.open(os.path.join(HERE, "firestore.rules"), encoding="utf-8").read()
 
-def req(method, url, body=None, owner=False):
+def signed_in_as(uid):
+    """A token for a signed-in user.
+
+    The emulator accepts unsigned JWTs, which is exactly what is wanted here:
+    the point is to exercise the rules, not Google's signing.
+    """
+    def part(obj):
+        return base64.urlsafe_b64encode(
+            json.dumps(obj, separators=(",", ":")).encode()).rstrip(b"=")
+
+    header = part({"alg": "none", "typ": "JWT"})
+    claims = part({
+        "iss": "https://securetoken.google.com/%s" % PID, "aud": PID,
+        "sub": uid, "user_id": uid,
+        "email": "somebody@example.com", "email_verified": True,
+    })
+    return (header + b"." + claims + b".").decode()
+
+
+def req(method, url, body=None, owner=False, token=None):
     data = json.dumps(body).encode() if body is not None else None
     r = urllib.request.Request(url, data=data, method=method)
     r.add_header("Content-Type", "application/json")
     if owner: r.add_header("Authorization", "Bearer owner")
+    elif token: r.add_header("Authorization", "Bearer " + token)
     try:
         with urllib.request.urlopen(r) as resp:
             return resp.status, json.loads(resp.read() or b"{}")
@@ -46,9 +66,14 @@ st, body = req("PUT", EMU + "/emulator/v1/projects/%s:securityRules" % PID,
 print("load firestore.rules:", st, "" if st == 200 else json.dumps(body)[:400])
 if st != 200: sys.exit(1)
 
-# start from empty
-for d in req("GET", BASE + "/logs?pageSize=300", owner=True)[1].get("documents", []):
-    req("DELETE", EMU + "/v1/" + d["name"], owner=True)
+# Start from empty, all the way - a single page would leave a big collection
+# behind and every count below would then be measuring the leftovers.
+while True:
+    found = req("GET", BASE + "/logs?pageSize=300", owner=True)[1].get("documents", [])
+    if not found:
+        break
+    for d in found:
+        req("DELETE", EMU + "/v1/" + d["name"], owner=True)
 
 def S(v): return {"stringValue": v}
 def I(v): return {"integerValue": str(v)}
@@ -92,6 +117,38 @@ print("\nsending it twice does not duplicate it:")
 st, _ = commit([(DEV + "_1", ROUND_START), (DEV + "_2", WORD), (DEV + "_3", ROUND_END)])
 check("the retry is accepted", st, 200)
 check("still three documents", count(), 3)
+
+print("\nwhat a signed-in reader can and cannot do:")
+# Republish the rules with one reader allowed, which is what the analytics
+# page asks you to paste in once you have signed in.
+READER = "a-reader-uid"
+with_reader = RULES.replace("      return [];", '      return ["%s"];' % READER)
+assert with_reader != RULES, "readers() no longer looks the way this test expects"
+st, _ = req("PUT", EMU + "/emulator/v1/projects/%s:securityRules" % PID,
+            {"rules": {"files": [{"name": "firestore.rules", "content": with_reader}]}})
+check("the rules still compile with a reader in them", st, 200)
+
+check("the named reader can list the log",
+      req("GET", BASE + "/logs?pageSize=5", token=signed_in_as(READER))[0], 200)
+check("a different signed-in account cannot",
+      req("GET", BASE + "/logs?pageSize=5", token=signed_in_as("somebody-else"))[0], 403)
+# Reading is the privilege being granted here; writing was already open to
+# anyone with the public key, and being signed in neither adds nor removes
+# that. What matters is that it still goes through the same shape checks.
+check("a reader writing is still shape-checked",
+      req("POST", BASE + ":commit", {"writes": [{"update": {
+          "name": "projects/%s/databases/(default)/documents/logs/wrong-id" % PID,
+          "fields": ROUND_START}}]},
+          token=signed_in_as(READER))[0], 403)
+check("the reader still cannot delete",
+      req("DELETE", BASE + "/logs/" + DEV + "_1", token=signed_in_as(READER))[0], 403)
+
+# Back to the shipped rules - readers() empty - for the rest.
+st, _ = req("PUT", EMU + "/emulator/v1/projects/%s:securityRules" % PID,
+            {"rules": {"files": [{"name": "firestore.rules", "content": RULES}]}})
+check("the shipped rules reload", st, 200)
+check("with readers() empty, a signed-in account cannot read either",
+      req("GET", BASE + "/logs?pageSize=5", token=signed_in_as(READER))[0], 403)
 
 print("\nwhat the key must not be able to do:")
 check("read one back",  req("GET", BASE + "/logs/" + DEV + "_1")[0], 403)
