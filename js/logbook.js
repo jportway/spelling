@@ -230,9 +230,11 @@
      everything behind them getting out too. Anybody who played the version
      before this one has a queue with some of these at the front of it.
 
-     Giving them a number now costs nothing: they are the oldest records this
-     device has, so numbering them below whatever comes next keeps the order
-     right and cannot collide. */
+     Giving them a number now costs nothing. They take the next numbers going,
+     which on a device that has already sent some records means an old record
+     gets a higher number than a newer one - harmless, because `n` is only
+     ever a unique name for the document. Order is read from `t`, which every
+     record has always carried. */
   function migrate() {
     var repaired = 0;
 
