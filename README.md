@@ -256,8 +256,9 @@ Records only leave the queue once Firestore has actually acknowledged them, so
 a failed upload costs a retry and nothing else.
 
 Under **Settings → Practice log** there is a switch for uploading and a button
-that downloads the lot as JSON. With the project unset — which is how this
-ships — the download is the whole mechanism.
+that downloads the lot as JSON. The switch off, or either constant at the top
+of `js/logbook.js` blanked, and the download is the whole mechanism — which is
+how a fresh clone pointed at nobody's project behaves.
 
 Uploading goes **straight from the browser to Firestore's REST API**. There is
 no server, no endpoint to stand up and no Firebase SDK, which would be a
@@ -280,15 +281,24 @@ Idempotency falls out of the naming rather than needing a mechanism.
 
 Once, in a browser, about three minutes. Everything after this is code.
 
+This one is already set up and pointed at `cooper-spelling`. To point a fork
+somewhere else, it is about three minutes in a browser and everything after
+that is code.
+
 1. [console.firebase.google.com](https://console.firebase.google.com) → add a
-   project. **Stay on the free Spark plan** — see the cost note below. Give it
-   a name that is not your child's: the project id ends up in this public
-   repository.
+   project. **Stay on the free Spark plan** — see the cost note below.
 2. **Build → Firestore Database → Create database**, production mode.
 3. **Rules** tab → paste [`firestore.rules`](firestore.rules) → Publish.
-4. **Project settings → Your apps → Web** → copy `projectId` and `apiKey` into
-   the two constants at the top of `js/logbook.js`, then rebuild the
-   standalone files (`python3 tools/build_standalone.py`) and push.
+4. **Project settings → Your apps**, and if there is no web app yet, the
+   **`</>`** icon to register one (no need for Hosting). The snippet it shows
+   has `apiKey` and `projectId` in it; those go into the two constants at the
+   top of `js/logbook.js`. Then `python3 tools/build_standalone.py` and push.
+
+**If you restrict the key** in the Cloud console (APIs & Services →
+Credentials), **API restrictions → Cloud Firestore API** is worth setting.
+**Application restrictions → HTTP referrers is not**: the standalone file is
+opened from `file://`, which sends no referrer, so every upload from it would
+be refused forever and the queue would grow and never drain.
 
 To read the log back, use the console, or the REST API with an owner
 credential — the rules deny reads to the key in the repository, so nothing
@@ -315,6 +325,20 @@ and the client keeps queueing. On Blaze it would bill you.
 
 **Nothing in the log identifies a person**: a random id for the device, and no
 name.
+
+### What has actually been checked
+
+Against the **live project**, over REST: a well-formed commit is accepted; the
+same batch sent twice writes over the same documents; and reads, collection
+listings, deletes, writes outside `logs`, a record filed under an id that does
+not match it, a timestamp years in the future and an oversized word are all
+refused. CORS preflight passes both from the Pages origin and from `null`,
+which is what the standalone file sends from `file://`.
+
+Against the **emulator**, in a real browser: a round drains the queue, a
+refused upload keeps every record and writes nothing, the Settings switch
+stops it, and the commit carries proper `arrayValue`/`mapValue`/`booleanValue`
+nesting with 64-bit integers as strings.
 
 The rules are tested rather than hoped at. `python3 tools/check_rules.py`
 drives them against the Firestore emulator with the records the game really

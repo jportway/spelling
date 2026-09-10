@@ -46,11 +46,12 @@
      Firestore rules, which are in firestore.rules next to this file - create
      and update only, shape checked, no reading anything back.
 
-     Leave PROJECT_ID empty and nothing is ever uploaded. The log still
-     collects locally and the download button still works.
+     Empty either one and nothing is ever uploaded - the log still collects
+     locally and the download button still works, which is how this behaves
+     for anyone who clones the repo and points it at their own project.
      ---------------------------------------------------------------------- */
-  var PROJECT_ID = "";
-  var API_KEY = "";
+  var PROJECT_ID = "cooper-spelling";
+  var API_KEY = "AIzaSyCFabIJPnpzG8ZxGqtE5xK851i5em5gzCc";
   var COLLECTION = "logs";
 
   /* About 300 KB of records at roughly 250 bytes each, well inside the 5 MB
