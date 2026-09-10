@@ -1,0 +1,81 @@
+/* ==========================================================================
+   firestore.rules - the only thing standing between the internet and the
+   practice log.
+
+   The game writes straight from the browser, with no server in between, so
+   the project id and web api key in js/logbook.js are public. Google is
+   explicit that this is fine: they name the project, they do not grant
+   anything. Everything that actually decides what may happen is in here.
+
+   What that means honestly: anyone who reads the repository can write
+   documents into `logs`. These rules constrain the shape and the size of
+   what they write, not who writes it. What they cannot do is read anything
+   back, list what is there, or delete any of it - so the realistic worst
+   case is junk rows to filter out when reading the log, not a leak. There is
+   nothing in a record but a random device id, words, letters and timings,
+   and no name.
+
+   Document ids are `<device>_<n>`, and the rules insist the id matches the
+   record inside. That is what makes a retry after a lost response land on
+   the document it already wrote instead of a second copy of it.
+
+   Paste this into the Firebase console: Firestore Database, Rules, Publish.
+   ========================================================================== */
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /logs/{entry} {
+
+      /* Nothing comes back out this way. The log is read with an owner
+         credential from a console or a script, never by the game. */
+      allow read: if false;
+      allow delete: if false;
+
+      allow create, update: if isRecord(request.resource.data)
+                            && entry == recordId(request.resource.data);
+    }
+
+    /* Anything that is not the log does not exist as far as the key is
+       concerned. */
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    /* The id a record has to be filed under: device and sequence number, which
+       together are unique for the life of an iPad. */
+    function recordId(rec) {
+      return rec.d + '_' + string(rec.n);
+    }
+
+    function isRecord(rec) {
+      return rec.keys().size() <= 16
+
+             // Who and which, the pair the document id is built from.
+             && rec.d is string && rec.d.size() >= 3 && rec.d.size() <= 24
+             && rec.n is int && rec.n > 0
+
+             // When, in milliseconds. Only the upper bound is checked: a record
+             // written on a train and uploaded a week later is the normal case
+             // and must go through, while a timestamp far in the future is junk.
+             && rec.t is int
+             && rec.t < request.time.toMillis() + 2592000000
+
+             // What kind of record - round-start, word, round-end. Left as a
+             // string on purpose: a new kind of record should be a code change
+             // and a push, not another trip to the console.
+             && rec.k is string && rec.k.size() <= 24
+
+             && (!('r' in rec) || rec.r == null ||
+                 (rec.r is string && rec.r.size() <= 24))
+             && (!('w' in rec) || (rec.w is string && rec.w.size() <= 32))
+             && (!('h' in rec) || (rec.h is list && rec.h.size() <= 16))
+
+             // One round of stubbornness on one word, generously. Beyond this
+             // it is not a child trying letters.
+             && (!('tries' in rec) || (rec.tries is list && rec.tries.size() <= 200));
+    }
+  }
+}

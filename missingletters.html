@@ -2256,34 +2256,10 @@ button {
   line-height: 1.45;
 }
 
-.logbook-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.logbook-field input {
-  padding: 9px 12px;
-  border-radius: 12px;
-  border: 2px solid var(--surface-line);
-  background: var(--surface);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.logbook-field input:focus {
-  outline: none;
-  border-color: var(--nudge);
+/* Pulled out by its own padding so the switch text lines up with the note
+   above it rather than sitting a centimetre to the right of it. */
+.logbook .switch {
+  margin: 0 -10px 4px;
 }
 </style>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>">
@@ -2688,21 +2664,23 @@ button {
       </li>
     </ul>
 
-    <!-- For whoever is keeping an eye on how she is getting on. The upload
-         address is typed in here rather than committed to the repository:
-         the site is public, and an address in it would be an open endpoint
-         for anyone who found it. -->
+    <!-- For whoever is keeping an eye on how she is getting on. There is no
+         address to type in any more: the log goes to the Firestore project
+         named in js/logbook.js. This switch is how to stop it leaving the
+         iPad at all - the log still gets kept, and can still be downloaded. -->
     <div class="logbook">
       <h3 class="logbook-title">Practice log</h3>
       <p class="logbook-note">
         Every word and every letter she tries, kept on this device.
         <strong id="logbookCount">0</strong> waiting to be sent.
       </p>
-      <label class="logbook-field">
-        <span>Send to</span>
-        <input type="url" id="logbookEndpoint" spellcheck="false"
-               autocomplete="off" autocapitalize="off"
-               placeholder="https://script.google.com/… (optional)">
+      <label class="switch">
+        <input type="checkbox" id="setUploadLog" checked>
+        <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+        <span class="switch-text">
+          <strong>Upload practice log</strong>
+          <small>Send it up whenever there is a network</small>
+        </span>
       </label>
       <button class="link-btn" id="logbookExportBtn" type="button">Download the log instead</button>
     </div>
@@ -25680,7 +25658,13 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
    Storage is local first and always. The queue in localStorage is the real
    copy; uploading is a drain on it, not a destination, which is what makes
    an iPad on a train work exactly like one at home. Records only leave the
-   queue once a server has actually acknowledged them.
+   queue once Firestore has actually acknowledged them.
+
+   Uploading goes straight to Firestore's REST API - no server, no endpoint to
+   stand up, and no Firebase SDK, which would be a hundred kilobytes of
+   dependency used once a round by a game that is otherwise entirely offline.
+   The only thing that ever ships is this file, through the same build as the
+   rest of the site.
 
    Nothing in here may ever break the game. Every entry point swallows its
    own errors: a full disk or a blocked cookie jar costs a log line, not a
@@ -25693,11 +25677,25 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   var QUEUE_KEY = "cooper.logbook.v1";
   var DEVICE_KEY = "cooper.logbook.device";
 
-  /* Where to send them. Deliberately not in this file: the site is public, so
-     a URL committed here would be an open endpoint for anyone who found it.
-     It is pasted in once on her iPad instead, from Settings, and lives only
-     in that browser. */
-  var ENDPOINT_KEY = "cooper.logbook.endpoint";
+  /* Counts every record this device has ever made. It has to outlive the
+     queue, because the queue drains: device + n is what makes a re-sent batch
+     land on the documents it already wrote instead of duplicating them. */
+  var SEQ_KEY = "cooper.logbook.seq";
+
+  /* ----------------------------------------------------------------------
+     Where the logs go. Both of these are safe to have in a public repository:
+     Google documents the browser config as non-secret. They name the project;
+     they do not grant anything. The security boundary is entirely the
+     Firestore rules, which are in firestore.rules next to this file - create
+     and update only, shape checked, no reading anything back.
+
+     Empty either one and nothing is ever uploaded - the log still collects
+     locally and the download button still works, which is how this behaves
+     for anyone who clones the repo and points it at their own project.
+     ---------------------------------------------------------------------- */
+  var PROJECT_ID = "cooper-spelling";
+  var API_KEY = "AIzaSyCFabIJPnpzG8ZxGqtE5xK851i5em5gzCc";
+  var COLLECTION = "logs";
 
   /* About 300 KB of records at roughly 250 bytes each, well inside the 5 MB
      localStorage gives us, and months of play. Oldest go first if it ever
@@ -25709,6 +25707,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
 
   var queue = [];
   var device = "";
+  var seq = 0;
   var round = null;
   var current = null;   // the word in progress
   var lastAt = 0;
@@ -25749,8 +25748,55 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     record.d = device;
     record.r = round;
     record.t = Date.now();
+    record.n = ++seq;
+    write(SEQ_KEY, String(seq));
+
     queue.push(record);
     save();
+  }
+
+  /* Firestore does not take plain JSON. Every value has to say what type it
+     is - {"stringValue": "cat"} rather than "cat" - so this walks a record
+     and puts the labels on. */
+  function encode(v) {
+    if (v === null || v === undefined) return { nullValue: null };
+    if (typeof v === "boolean") return { booleanValue: v };
+
+    if (typeof v === "number") {
+      if (!isFinite(v)) return { nullValue: null };
+      // Integers go as strings: Firestore's integerValue is a 64 bit type and
+      // JSON numbers cannot carry one safely.
+      return v % 1 === 0
+        ? { integerValue: String(v) }
+        : { doubleValue: v };
+    }
+
+    if (Array.isArray(v)) {
+      var values = [];
+      for (var i = 0; i < v.length; i++) values.push(encode(v[i]));
+      return { arrayValue: { values: values } };
+    }
+
+    if (typeof v === "object") return { mapValue: { fields: encodeFields(v) } };
+    return { stringValue: String(v) };
+  }
+
+  function encodeFields(obj) {
+    var out = {};
+    for (var key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        out[key] = encode(obj[key]);
+      }
+    }
+    return out;
+  }
+
+  /* The document a record belongs in. Deterministic on purpose: if an upload
+     lands but the reply is lost on the way back, the retry writes over the
+     same documents rather than a second copy of them. */
+  function documentPath(record) {
+    return "projects/" + PROJECT_ID + "/databases/(default)/documents/" +
+           COLLECTION + "/" + record.d + "_" + record.n;
   }
 
   function makeId(prefix) {
@@ -25758,7 +25804,11 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   }
 
   var Logbook = {
+    /* Recording happens whatever: it is local, it is small, and it is what
+       the download button has to offer. Uploading is the part with a switch
+       on it, under Settings. */
     enabled: true,
+    uploading: true,
 
     init: function () {
       try {
@@ -25768,6 +25818,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
         queue = [];
       }
 
+      seq = parseInt(read(SEQ_KEY), 10) || 0;
       device = read(DEVICE_KEY) || "";
       if (!device) {
         // A random id for the iPad, so rounds can be told apart. Not her
@@ -25779,17 +25830,6 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       // Anything left over from last time goes as soon as there is a network.
       global.addEventListener("online", function () { Logbook.flush(); });
       this.flush();
-    },
-
-    endpoint: function (url) {
-      if (url === undefined) return read(ENDPOINT_KEY) || "";
-      if (url) write(ENDPOINT_KEY, url);
-      else {
-        try {
-          global.localStorage.removeItem(ENDPOINT_KEY);
-        } catch (err) { /* nothing to do */ }
-      }
-      return url || "";
     },
 
     startRound: function (meta) {
@@ -25858,25 +25898,39 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       this.flush();
     },
 
-    /* Send what we can. Records stay in the queue until a server has said it
-       has them, so a failed upload costs nothing but a retry. */
+    /* Send what we can, as one atomic commit. Records stay in the queue until
+       Firestore has said it has them, so a failed upload costs a retry and
+       nothing else. */
     flush: function () {
-      var url = this.endpoint();
-      if (!url || sending || !queue.length) return;
+      if (!this.uploading || !PROJECT_ID || !API_KEY) return;
+      if (sending || !queue.length) return;
       if (global.navigator && global.navigator.onLine === false) return;
       if (typeof global.fetch !== "function") return;
 
       sending = true;
       var batch = queue.slice(0, BATCH);
 
-      // text/plain on purpose: anything else triggers a CORS preflight, and
-      // a Google Apps Script web app redirects, which preflight will not
-      // follow. This is the one content type that gets through.
-      global.fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ v: 1, device: device, records: batch })
-      }).then(function (response) {
+      var writes = [];
+      for (var i = 0; i < batch.length; i++) {
+        writes.push({
+          update: {
+            name: documentPath(batch[i]),
+            fields: encodeFields(batch[i])
+          }
+        });
+      }
+
+      // One commit for the whole batch: it either all lands or none of it
+      // does, so there is never a half-written batch to reason about.
+      global.fetch(
+        "https://firestore.googleapis.com/v1/projects/" + PROJECT_ID +
+        "/databases/(default)/documents:commit?key=" + encodeURIComponent(API_KEY),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ writes: writes })
+        }
+      ).then(function (response) {
         sending = false;
         if (!response || !response.ok) return;
 
@@ -25884,7 +25938,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
         save();
         if (queue.length) Logbook.flush();
       })["catch"](function () {
-        // Offline, blocked, or the endpoint is wrong. Try again next time.
+        // Offline, blocked, or misconfigured. Try again next time.
         sending = false;
       });
     },
@@ -25909,7 +25963,12 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       return queue.length;
     },
 
-    /* Exposed for the tests. */
+    /* Exposed for the tests, and for checking a fresh install is pointed
+       somewhere before wondering why nothing is arriving. */
+    target: function () {
+      return PROJECT_ID ? PROJECT_ID + "/" + COLLECTION : "";
+    },
+
     peek: function () {
       return queue.slice();
     },
@@ -26725,7 +26784,11 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     letterHelper: true,
     kitten: true,
     sound: true,
-    calm: false
+    calm: false,
+
+    /* Recording is not optional - it is local and it is the point. Sending it
+       anywhere is. */
+    uploadLog: true
   };
 
   var dom = {};
@@ -27843,7 +27906,8 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     letterHelper: "setLetterHelper",
     kitten: "setKitten",
     sound: "setSound",
-    calm: "setCalm"
+    calm: "setCalm",
+    uploadLog: "setUploadLog"
   };
 
   function applySettings() {
@@ -27851,6 +27915,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     global.Reward.enabled = settings.rewardVideo;
     global.Kitten.setEnabled(settings.kitten);
     global.Confetti.calm = settings.calm;
+    global.Logbook.uploading = settings.uploadLog;
     document.body.classList.toggle("calm", settings.calm);
     applyLetterHelper();
   }
@@ -27860,15 +27925,6 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
   }
 
   function wireLogbook() {
-    dom.logbookEndpoint.value = global.Logbook.endpoint();
-
-    dom.logbookEndpoint.addEventListener("change", function () {
-      var url = dom.logbookEndpoint.value.trim();
-      global.Logbook.endpoint(url);
-      if (url) global.Logbook.flush();
-      refreshLogbook();
-    });
-
     dom.logbookExportBtn.addEventListener("click", function () {
       global.Logbook.download();
     });
@@ -27884,6 +27940,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
         saveStore();
         if (key === "sound" && input.checked) global.Sound.place();
         if (key === "kitten" && input.checked) global.Kitten.react("cheer");
+        if (key === "uploadLog" && input.checked) global.Logbook.flush();
       });
     });
   }
@@ -28113,7 +28170,7 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       "endScore", "endWords", "endFirstTime", "endTricky", "endNote",
       "wobblyBlock", "wobblyList", "missedBlock", "missedList", "againBtn",
       "homeBtn", "helpScreen", "helpCards", "helpCloseBtn", "settingsScreen",
-      "settingsCloseBtn", "logbookCount", "logbookEndpoint", "logbookExportBtn"
+      "settingsCloseBtn", "logbookCount", "logbookExportBtn"
     ].forEach(function (id) {
       dom[id] = byId(id);
     });
@@ -28148,6 +28205,9 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     collectDom();
     loadStore();
 
+    /* Before init, not after: init flushes whatever last time left behind,
+       and a switch that is off has to mean off from the first moment. */
+    global.Logbook.uploading = settings.uploadLog;
     global.Logbook.init();
     global.Confetti.init(byId("confetti"));
     global.Kitten.init(byId("kitten"));

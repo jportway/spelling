@@ -644,32 +644,8 @@
   line-height: 1.45;
 }
 
-.logbook-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.logbook-field input {
-  padding: 9px 12px;
-  border-radius: 12px;
-  border: 2px solid var(--surface-line);
-  background: var(--surface);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-.logbook-field input:focus {
-  outline: none;
-  border-color: var(--nudge);
+/* Pulled out by its own padding so the switch text lines up with the note
+   above it rather than sitting a centimetre to the right of it. */
+.logbook .switch {
+  margin: 0 -10px 4px;
 }

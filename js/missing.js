@@ -77,7 +77,11 @@
     letterHelper: true,
     kitten: true,
     sound: true,
-    calm: false
+    calm: false,
+
+    /* Recording is not optional - it is local and it is the point. Sending it
+       anywhere is. */
+    uploadLog: true
   };
 
   var dom = {};
@@ -1195,7 +1199,8 @@
     letterHelper: "setLetterHelper",
     kitten: "setKitten",
     sound: "setSound",
-    calm: "setCalm"
+    calm: "setCalm",
+    uploadLog: "setUploadLog"
   };
 
   function applySettings() {
@@ -1203,6 +1208,7 @@
     global.Reward.enabled = settings.rewardVideo;
     global.Kitten.setEnabled(settings.kitten);
     global.Confetti.calm = settings.calm;
+    global.Logbook.uploading = settings.uploadLog;
     document.body.classList.toggle("calm", settings.calm);
     applyLetterHelper();
   }
@@ -1212,15 +1218,6 @@
   }
 
   function wireLogbook() {
-    dom.logbookEndpoint.value = global.Logbook.endpoint();
-
-    dom.logbookEndpoint.addEventListener("change", function () {
-      var url = dom.logbookEndpoint.value.trim();
-      global.Logbook.endpoint(url);
-      if (url) global.Logbook.flush();
-      refreshLogbook();
-    });
-
     dom.logbookExportBtn.addEventListener("click", function () {
       global.Logbook.download();
     });
@@ -1236,6 +1233,7 @@
         saveStore();
         if (key === "sound" && input.checked) global.Sound.place();
         if (key === "kitten" && input.checked) global.Kitten.react("cheer");
+        if (key === "uploadLog" && input.checked) global.Logbook.flush();
       });
     });
   }
@@ -1465,7 +1463,7 @@
       "endScore", "endWords", "endFirstTime", "endTricky", "endNote",
       "wobblyBlock", "wobblyList", "missedBlock", "missedList", "againBtn",
       "homeBtn", "helpScreen", "helpCards", "helpCloseBtn", "settingsScreen",
-      "settingsCloseBtn", "logbookCount", "logbookEndpoint", "logbookExportBtn"
+      "settingsCloseBtn", "logbookCount", "logbookExportBtn"
     ].forEach(function (id) {
       dom[id] = byId(id);
     });
@@ -1500,6 +1498,9 @@
     collectDom();
     loadStore();
 
+    /* Before init, not after: init flushes whatever last time left behind,
+       and a switch that is off has to mean off from the first moment. */
+    global.Logbook.uploading = settings.uploadLog;
     global.Logbook.init();
     global.Confetti.init(byId("confetti"));
     global.Kitten.init(byId("kitten"));
