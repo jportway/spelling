@@ -5,6 +5,9 @@ tools/package-lock.json
 __pycache__/
 *.pyc
 
+# The local test server's request log, from `python3 -m http.server`.
+server.log
+
 # Anything pulled out of Firestore, and anything that could pull it. The
 # service account key is a real credential - unlike the browser config in
 # js/logbook.js, it grants access rather than merely naming the project.
