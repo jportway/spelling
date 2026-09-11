@@ -1,0 +1,196 @@
+/* ==========================================================================
+   trace.css — the tracing board.
+
+   One big square where her finger goes, with the writing lines drawn on it
+   like an exercise book; the letter and its cue above; a row of large
+   buttons below. Everything else - the balloon, the kitten, the overlays -
+   is the same furniture as the other two games, and comes from their
+   stylesheets.
+   ========================================================================== */
+
+/* The word games let the stage size itself to its rows. Here the board has
+   to be as big as the screen allows - a seven year old's finger wants room -
+   so the stage stretches, the section fills it, and the board takes whatever
+   is left after the cue and the buttons. The canvas then squares itself off
+   to the smaller of its width and height. */
+body.game-trace .stage {
+  grid-template-areas: "build";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
+.trace-build {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 10px;
+  min-height: 0;
+  position: relative;
+  /* The shared .build centres its children, which on a grid means "size them
+     to their content" - and the board's content is a canvas waiting to be
+     told how big to be. Stretch, so the board takes its whole row and the
+     canvas can measure it. */
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+body.game-trace .title {
+  font-size: clamp(32px, 7.5vmin, 54px);
+}
+
+/* The letter she is drawing, and what to do. */
+.ask {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 64px;
+}
+
+.letter-big {
+  font-family: var(--font-letters);
+  font-size: clamp(44px, 9vmin, 76px);
+  font-weight: 700;
+  line-height: 1;
+  min-width: 1.2em;
+  text-align: center;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, .3);
+}
+
+/* From memory the letter itself is the thing being tested, so the big one
+   goes and only its name is spoken. */
+.board[data-stage="memory"] ~ .ask .letter-big,
+.trace-build[data-stage="memory"] .letter-big { visibility: hidden; }
+
+.ask-text { text-align: left; }
+
+.stage-name {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1px solid var(--surface-line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin-bottom: 4px;
+}
+
+.cue {
+  margin: 0;
+  font-size: clamp(16px, 2.6vmin, 22px);
+  color: var(--ink-soft);
+  max-width: 34ch;
+}
+
+/* The board: the pad fills the square, the model sits in its corner. */
+.board {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  touch-action: none;             /* the whole point */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.pad-wrap {
+  position: relative;
+  line-height: 0;
+}
+
+.pad {
+  background: var(--surface);
+  border: 2px solid var(--surface-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  touch-action: none;
+  cursor: crosshair;
+  display: block;
+}
+
+.board.is-demo .pad { cursor: default; }
+
+.model {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 96px;
+  height: 96px;
+  background: var(--surface-2);
+  border: 2px solid var(--surface-line);
+  border-radius: 16px;
+  pointer-events: none;
+}
+
+.trace-build .message {
+  text-align: center;
+  padding: 0 12px;
+  min-height: 30px;
+}
+
+.pad-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pad-actions .btn {
+  min-height: 48px;
+  padding: 0 18px;
+  font-size: 16px;
+}
+
+.btn-done {
+  background: var(--go);
+  color: #08321f;
+  border-color: var(--go-dark);
+}
+
+/* Puffs on their way to the balloon, as in the word game. */
+.puff-fly {
+  position: fixed;
+  z-index: 40;
+  font-size: 26px;
+  line-height: 1;
+  pointer-events: none;
+  transition: transform .6s cubic-bezier(.3, .7, .3, 1), opacity .6s ease;
+  opacity: 1;
+}
+
+/* The results screen: the letters that went wobbly, tappable. */
+.wobbly-letters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.wobbly-letter {
+  appearance: none;
+  border: 2px solid var(--surface-line);
+  background: var(--surface-2);
+  border-radius: 14px;
+  width: 56px;
+  height: 56px;
+  font-family: var(--font-letters);
+  font-size: 30px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wobbly-letter:hover { border-color: var(--nudge); }
+
+.records div:nth-child(3) { display: block; }
+
+@media (max-width: 560px) {
+  .model { width: 72px; height: 72px; }
+  .ask { gap: 12px; }
+  .cue { font-size: 15px; }
+}
+
+body.calm .puff-fly { transition-duration: .2s; }

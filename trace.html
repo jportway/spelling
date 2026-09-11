@@ -2,40 +2,18 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#1b2340">
-<title>Cooper's Word Game</title>
-
-<script>
-/* First thing on the page, deliberately: everything below it — the
-   stylesheet, the word list, the game itself — has to download before any of
-   it can say anything. On a slow connection this is the only code running,
-   so it is the only thing that can tell her the difference between "still
-   coming" and "broken". */
-(function () {
-  var timer = setInterval(function () {
-    if (window.SPELLING_WORDS_EVERYDAY) {
-      clearInterval(timer);
-      return;
-    }
-    var text = document.getElementById("loadingText");
-    if (!text) return;               // that part of the page is not parsed yet
-
-    var seconds = Math.round(performance.now() / 1000);
-    if (seconds >= 4) {
-      text.textContent = "Still fetching the words… " + seconds +
-        "s. It is only slow the first time.";
-    }
-  }, 500);
-})();
-</script>
-
-<link rel="preload" href="data/words.js" as="script">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Cooper's Letter Tracing</title>
 <link rel="stylesheet" href="css/styles.css">
 <link rel="stylesheet" href="css/kitten.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+<link rel="stylesheet" href="css/missing.css">
+<link rel="stylesheet" href="css/trace.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✏️</text></svg>">
 </head>
-<body>
+<body class="game-trace">
 
 <canvas id="confetti" aria-hidden="true"></canvas>
 
@@ -43,25 +21,32 @@
 
   <header class="hud">
     <div class="hud-left">
-      <div class="timer" id="timer">
-        <svg class="timer-ring" viewBox="0 0 44 44" aria-hidden="true">
-          <circle class="timer-track" cx="22" cy="22" r="19"></circle>
-          <circle class="timer-fill" id="timerFill" cx="22" cy="22" r="19"></circle>
-        </svg>
-        <span class="timer-text" id="timerText">5:00</span>
-      </div>
       <button class="icon-btn" id="pauseBtn" type="button" title="Pause (space)" aria-label="Pause">
         <span class="icon-pause" aria-hidden="true"></span>
       </button>
     </div>
 
-    <div class="hud-score">
-      <span class="score-value" id="scoreValue">0</span>
-      <span class="score-label">points</span>
+    <div class="hud-balloon">
+      <div class="balloon" id="balloon" role="progressbar"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+           aria-label="How full the balloon is">
+        <svg class="balloon-svg" viewBox="0 0 100 140" focusable="false" aria-hidden="true">
+          <g class="balloon-body">
+            <path class="b-skin" d="M50 6c-24 0-40 20-40 46 0 26 20 46 40 52 20-6 40-26 40-52 0-26-16-46-40-46z"/>
+            <!-- The same shape again in a paler rubber, faded up as it fills:
+                 stretched rubber goes thin and light, and that is the tell. -->
+            <path class="b-stretch" d="M50 6c-24 0-40 20-40 46 0 26 20 46 40 52 20-6 40-26 40-52 0-26-16-46-40-46z"/>
+            <ellipse class="b-shine" cx="34" cy="36" rx="10" ry="15"/>
+            <path class="b-knot" d="M44 103h12l-4 9h-4z"/>
+          </g>
+          <path class="b-string" d="M50 112q7 9-1 16 8 7 1 12"/>
+        </svg>
+      </div>
+      <span class="balloon-label" id="balloonLabel">blow it up!</span>
     </div>
 
     <div class="hud-right">
-      <button class="icon-btn" id="helpBtn" type="button" title="Tricky letters" aria-label="Tricky letters guide">?</button>
+      <button class="icon-btn" id="helpBtn" type="button" title="How to draw the letters" aria-label="How to draw the letters">?</button>
       <button class="icon-btn" id="settingsBtn" type="button" title="Settings" aria-label="Settings">
         <span class="icon-gear" aria-hidden="true">⚙</span>
       </button>
@@ -69,13 +54,18 @@
   </header>
 
   <main class="stage">
+    <section class="build trace-build" id="build" aria-label="Draw the letter">
 
-    <section class="build" aria-label="Word you are building">
+      <div class="ask">
+        <div class="letter-big" id="letterBig" aria-hidden="true"></div>
+        <div class="ask-text">
+          <span class="stage-name" id="stageName">trace</span>
+          <p class="cue" id="cue"></p>
+        </div>
+      </div>
 
-      <!-- The kitten sits on the rim of the word line and watches. It is
-           decoration, so it is hidden from screen readers; every reaction it
-           has is also said in words by the message line below. -->
-      <div class="kitten" id="kitten" aria-hidden="true">
+      <div class="board" id="board" data-stage="trace">
+        <div class="kitten" id="kitten" aria-hidden="true">
         <svg class="kitten-svg" viewBox="0 0 120 108" focusable="false">
           <!-- Tail: drawn first so it sits behind the body. A single open
                sweep on purpose — curl it into a spiral and the dark page
@@ -125,7 +115,7 @@
                   d="M30 42 h-16 M30 47 h-15 M90 42 h16 M90 47 h15"/>
           </g>
 
-          <!-- shown only when she finds a word -->
+          <!-- shown only when she gets one right -->
           <g class="k-hearts">
             <path class="k-heart k-heart-1" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
             <path class="k-heart k-heart-2" d="M0 6 a4 4 0 0 1 8 0 a4 4 0 0 1 8 0 q0 8 -8 14 q-8 -6 -8 -14z"/>
@@ -140,79 +130,69 @@
           </g>
         </svg>
       </div>
-
-      <div class="word-line" id="wordLine" role="list" aria-label="Letters in your word">
-        <p class="word-line-empty" id="wordLineEmpty">Tap letters to build a word</p>
+        <div class="pad-wrap">
+          <canvas class="pad" id="pad" aria-label="Draw here with your finger"></canvas>
+          <canvas class="model" id="model" width="192" height="192" aria-hidden="true" hidden></canvas>
+        </div>
       </div>
 
-      <div class="build-actions">
-        <button class="btn btn-quiet" id="clearBtn" type="button">
-          <span aria-hidden="true">↩</span> Clear
-        </button>
-        <button class="btn btn-quiet" id="soundOutBtn" type="button">
-          <span aria-hidden="true">🔊</span> Sound it out
-        </button>
-        <button class="btn btn-go" id="checkBtn" type="button">
-          Check! <span aria-hidden="true">✓</span>
-        </button>
+      <p class="message" id="message" aria-live="polite"></p>
+
+      <div class="pad-actions">
+        <button class="btn" id="showBtn" type="button">Show me</button>
+        <button class="btn" id="sayBtn" type="button" aria-label="Say it again">🔊 Say it</button>
+        <button class="btn" id="clearBtn" type="button">Clear</button>
+        <button class="btn btn-done" id="doneBtn" type="button" hidden>Done ✓</button>
+        <button class="link-btn" id="skipBtn" type="button">Skip this one</button>
       </div>
 
-      <p class="message" id="message" role="status" aria-live="polite"></p>
     </section>
-
-    <section class="grid-wrap" aria-label="Your letters">
-      <div class="grid" id="grid"></div>
-      <button class="btn btn-quiet btn-shuffle" id="shuffleBtn" type="button">
-        <span aria-hidden="true">🔀</span> Shuffle
-      </button>
-    </section>
-
-    <aside class="found" aria-label="Words you have found">
-      <h2 class="found-title">
-        Cooper's words <span class="found-count" id="foundCount">0</span>
-      </h2>
-      <ul class="found-list" id="foundList"></ul>
-      <p class="found-empty" id="foundEmpty">Your words will appear here, Cooper ✨</p>
-    </aside>
-
   </main>
 </div>
 
 <!-- ─────────────────────────────  Start  ───────────────────────────── -->
 <div class="overlay is-open" id="startScreen">
   <div class="panel panel-start">
-    <h1 class="title">Cooper's<br>Word&nbsp;Game</h1>
-    <p class="subtitle">How many words can you make, Cooper?</p>
+    <h1 class="title">Cooper's<br>Letter&nbsp;Tracing</h1>
+    <p class="subtitle">Draw the letters with your finger, Cooper.</p>
 
     <div class="loading" id="loadingRow">
       <span class="spinner" aria-hidden="true"></span>
-      <span id="loadingText">Getting Cooper's words ready…</span>
+      <span id="loadingText">Getting ready…</span>
     </div>
 
     <div class="start-body" id="startBody" hidden>
-      <div class="length-choice" role="group" aria-label="How long to play">
-        <span class="length-label">Play for</span>
-        <div class="chips" id="durationChips">
-          <button class="chip" type="button" data-minutes="3">3 min</button>
-          <button class="chip is-on" type="button" data-minutes="5">5 min</button>
-          <button class="chip" type="button" data-minutes="10">10 min</button>
+      <p class="panel-text how-to">
+        Start at the green dot and follow the arrow. First you trace, then you
+        copy, then you draw it all by yourself. Every good letter blows the
+        balloon up — fill it and it goes <strong>POP</strong>. No clock, so
+        take your time.
+      </p>
+
+      <div class="length-choice" role="group" aria-label="How many letters">
+        <span class="length-label">Letters</span>
+        <div class="chips" id="countChips">
+          <button class="chip" type="button" data-letters="6">6</button>
+          <button class="chip is-on" type="button" data-letters="10">10</button>
+          <button class="chip" type="button" data-letters="15">15</button>
         </div>
       </div>
 
-      <button class="btn btn-play" id="playBtn" type="button">Play <span aria-hidden="true">▶</span></button>
+      <button class="btn btn-play" id="playBtn" type="button">Draw <span aria-hidden="true">✏️</span></button>
 
       <dl class="records" id="records">
-        <div><dt>Cooper's best</dt><dd id="bestScore">0</dd></div>
-        <div><dt>Words collected</dt><dd id="collectionCount">0</dd></div>
+        <div><dt>Biggest balloon</dt><dd id="bestScore">0%</dd></div>
+        <div><dt>Balloons popped</dt><dd id="collectionCount">0</dd></div>
+        <div><dt>Letters from memory</dt><dd id="masteredCount">0</dd></div>
       </dl>
 
       <div class="start-links">
-        <button class="link-btn" id="startHelpBtn" type="button">Tricky letters: b d p q n m</button>
+        <button class="link-btn" id="startHelpBtn" type="button">How to draw each letter</button>
         <button class="link-btn" id="startSettingsBtn" type="button">Settings</button>
       </div>
 
       <p class="other-game">
-        Fancy another? <a href="missing.html">Missing Letters →</a> &nbsp;·&nbsp; <a href="trace.html">Letter Tracing →</a>
+        Fancy the others? <a href="missing.html">Missing Letters →</a> &nbsp;·&nbsp; <a href="index.html">Word Game →</a>
       </p>
 
       <p class="dedication">Made for Cooper, with love from Dad 💜</p>
@@ -233,35 +213,34 @@
 <!-- ─────────────────────────────  Results  ──────────────────────────── -->
 <div class="overlay" id="endScreen">
   <div class="panel panel-wide">
-    <h2 class="panel-title" id="endTitle">Time's up!</h2>
+    <h2 class="panel-title" id="endTitle">All done!</h2>
 
     <div class="result-stats">
-      <div class="stat"><span class="stat-value" id="endScore">0</span><span class="stat-label">points</span></div>
-      <div class="stat"><span class="stat-value" id="endWords">0</span><span class="stat-label">words</span></div>
-      <div class="stat"><span class="stat-value" id="endLongest">–</span><span class="stat-label">longest</span></div>
-      <div class="stat"><span class="stat-value" id="endTricky">0</span><span class="stat-label">tricky letters</span></div>
+      <div class="stat"><span class="stat-value" id="endFill">0%</span><span class="stat-label">balloon</span></div>
+      <div class="stat"><span class="stat-value" id="endLetters">0</span><span class="stat-label">letters</span></div>
+      <div class="stat"><span class="stat-value" id="endClean">0</span><span class="stat-label">first go</span></div>
     </div>
 
     <p class="result-note" id="endNote"></p>
 
-    <div class="missed" id="missedBlock" hidden>
-      <h3 class="missed-title">You could also have made…</h3>
-      <ul class="missed-list" id="missedList"></ul>
-      <p class="missed-hint">Tap a word to hear what it means</p>
+    <div class="missed" id="wobblyBlock" hidden>
+      <h3 class="missed-title">Still a bit wobbly</h3>
+      <div class="wobbly-letters" id="wobblyList"></div>
+      <p class="missed-hint">Tap a letter to hear how to draw it</p>
     </div>
 
     <div class="panel-actions">
-      <button class="btn btn-play" id="againBtn" type="button">Play again <span aria-hidden="true">▶</span></button>
+      <button class="btn btn-play" id="againBtn" type="button">Draw again <span aria-hidden="true">✏️</span></button>
       <button class="link-btn" id="homeBtn" type="button">Back to the start</button>
     </div>
   </div>
 </div>
 
-<!-- ─────────────────────────  Tricky letters  ───────────────────────── -->
+<!-- ─────────────────────────  How to draw them  ─────────────────────── -->
 <div class="overlay" id="helpScreen">
   <div class="panel panel-wide">
     <h2 class="panel-title">Tricky letters</h2>
-    <p class="panel-text">These six try to trick you, Cooper. Two questions catch them out every time.</p>
+    <p class="panel-text">Tap a letter to hear how to draw it, Cooper. Start at the green dot and follow the arrow.</p>
 
     <div class="help-rules">
       <p class="help-rule"><strong>1.</strong> Which side is the <em>ball</em> on?</p>
@@ -301,6 +280,27 @@
   </div>
 </div>
 
+<!-- ─────────────────────────────  Reward  ───────────────────────────── -->
+<div class="overlay overlay-reward" id="rewardScreen">
+  <div class="reward-panel">
+    <h2 class="reward-title">POP!<span class="reward-sub">You filled it, Cooper</span></h2>
+
+    <!-- The video, when there is one. This is the only thing in either game
+         that reaches the network, and it is loaded here and nowhere else. -->
+    <div class="reward-frame" id="rewardFrame" hidden></div>
+
+    <!-- And what happens instead when there is not, or it will not load. -->
+    <div class="reward-party" id="rewardParty" hidden>
+      <div class="party-balloons" aria-hidden="true">
+        <span>🎈</span><span>🎉</span><span>🎈</span><span>✨</span><span>🎈</span>
+      </div>
+      <p class="panel-text">That is a whole balloon. Look at you.</p>
+    </div>
+
+    <button class="btn btn-play" id="rewardDoneBtn" type="button">Done <span aria-hidden="true">✓</span></button>
+  </div>
+</div>
+
 <!-- ─────────────────────────────  Settings  ─────────────────────────── -->
 <div class="overlay" id="settingsScreen">
   <div class="panel">
@@ -309,45 +309,25 @@
     <ul class="settings-list">
       <li class="setting">
         <label class="switch">
-          <input type="checkbox" id="setLetterHelper" checked>
+          <input type="checkbox" id="setRewardVideo" checked>
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           <span class="switch-text">
-            <strong>Letter helper</strong>
-            <small>Show the ball-and-stick shape under b d p q n m</small>
+            <strong>Pony video</strong>
+            <small>Play a video when the balloon pops, if there is one to play</small>
           </span>
         </label>
       </li>
       <li class="setting">
         <label class="switch">
-          <input type="checkbox" id="setSpeakLetters" checked>
+          <input type="checkbox" id="setAutoSay" checked>
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
           <span class="switch-text">
-            <strong>Say each letter</strong>
-            <small>Read a letter aloud when it is picked up</small>
+            <strong>Say the word</strong>
+            <small>Read each new word out as it appears</small>
           </span>
         </label>
       </li>
-      <li class="setting">
-        <label class="switch">
-          <input type="checkbox" id="setSpeakDefinitions" checked>
-          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-          <span class="switch-text">
-            <strong>Read out meanings</strong>
-            <small>Say what a word means when it is found</small>
-          </span>
-        </label>
-      </li>
-      <li class="setting">
-        <label class="switch">
-          <input type="checkbox" id="setWordGlow" checked>
-          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-          <span class="switch-text">
-            <strong>Glow on real words</strong>
-            <small>Light up the Check button when the word is right</small>
-          </span>
-        </label>
-      </li>
-      <li class="setting">
+                  <li class="setting">
         <label class="switch">
           <input type="checkbox" id="setKitten" checked>
           <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
@@ -379,24 +359,47 @@
       </li>
     </ul>
 
+    <!-- For whoever is keeping an eye on how she is getting on. There is no
+         address to type in any more: the log goes to the Firestore project
+         named in js/logbook.js. This switch is how to stop it leaving the
+         iPad at all - the log still gets kept, and can still be downloaded. -->
+    <div class="logbook">
+      <h3 class="logbook-title">Practice log</h3>
+      <p class="logbook-note">
+        Every word and every letter she tries, kept on this device.
+        <strong id="logbookCount">0</strong> waiting to be sent.
+      </p>
+      <label class="switch">
+        <input type="checkbox" id="setUploadLog" checked>
+        <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+        <span class="switch-text">
+          <strong>Upload practice log</strong>
+          <small>Send it up whenever there is a network</small>
+        </span>
+      </label>
+      <p class="logbook-status" id="logbookStatus"></p>
+      <div class="logbook-actions">
+        <button class="btn btn-small" id="logbookSendBtn" type="button">Send now</button>
+        <button class="link-btn" id="logbookExportBtn" type="button">Download the log</button>
+      </div>
+    </div>
+
     <div class="panel-actions">
       <button class="btn btn-play" id="settingsCloseBtn" type="button">Done</button>
     </div>
   </div>
 </div>
 
-<script src="data/words.js"></script>
-<!-- definitions-inline-here: data/definitions.js is fetched in the background
-     once the game is playable; the standalone build inlines it at this point
-     instead, so a single file needs no network at all. -->
 <script src="js/letters.js"></script>
-<script src="js/dictionary.js"></script>
 <script src="js/speech.js"></script>
 <script src="js/sound.js"></script>
 <script src="js/confetti.js"></script>
 <script src="js/kitten.js"></script>
-<script src="js/grid.js"></script>
-<script src="js/dragdrop.js"></script>
-<script src="js/game.js"></script>
+<script src="js/logbook.js"></script>
+<script src="js/balloon.js"></script>
+<script src="js/reward.js"></script>
+<script src="js/strokes.js"></script>
+<script src="js/recogniser.js"></script>
+<script src="js/trace.js"></script>
 </body>
 </html>

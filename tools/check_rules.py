@@ -118,6 +118,19 @@ st, _ = commit([(DEV + "_1", ROUND_START), (DEV + "_2", WORD), (DEV + "_3", ROUN
 check("the retry is accepted", st, 200)
 check("still three documents", count(), 3)
 
+print("\nthe tracing game's records:")
+TRACE = {"k": S("trace"), "l": S("b"), "st": I(2), "a": I(1),
+         "ok": {"booleanValue": False}, "fm": {"booleanValue": False}, "f": S("reversal"),
+         "ms": I(4120),
+         "s": L([S("32,12,32,78"), S("32,60,50,42,68,60")]),
+         "d": S(DEV), "r": S("r_selftest"), "t": I(1757000000003), "n": I(7)}
+check("a trace record with her strokes is accepted", commit([(DEV + "_7", TRACE)])[0], 200)
+too_many = dict(TRACE); too_many["s"] = L([S("1,2")] * 9); too_many["n"] = I(8)
+nested = dict(TRACE); nested["s"] = L([L([I(1), I(2)])]); nested["n"] = I(9)
+check("an array inside an array is malformed, not merely refused",
+      commit([(DEV + "_9", nested)])[0], 400)
+check("nine strokes is refused", commit([(DEV + "_8", too_many)])[0], 403)
+
 print("\nwhat a signed-in reader can and cannot do:")
 # Republish the rules with one reader allowed, which is what the analytics
 # page asks you to paste in once you have signed in.

@@ -11,6 +11,7 @@ Usage
 Output
     wordbuilder.html     Cooper's Word Game
     missingletters.html  Cooper's Missing Letters
+    lettertracing.html   Cooper's Letter Tracing
 
 Each is about 1.5 MB with no external files and no network. Keep the two in
 the same folder and the link between them on the start screens still works.
@@ -28,7 +29,11 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES = {
     "index.html": "wordbuilder.html",
     "missing.html": "missingletters.html",
+    "trace.html": "lettertracing.html",
 }
+
+# Only the word games fetch definitions; tracing has no words in it.
+NEEDS_DEFINITIONS = {"index.html", "missing.html"}
 
 STYLESHEET = re.compile(r'[ \t]*<link rel="stylesheet" href="([^"]+)">\n?')
 SCRIPT = re.compile(r'[ \t]*<script src="([^"]+)"[^>]*></script>\n?')
@@ -82,8 +87,10 @@ def build_page(source_name: str, out_name: str) -> None:
     html, styles = STYLESHEET.subn(inline_style, html)
     html, scripts = SCRIPT.subn(inline_script, html)
 
-    if not styles or not scripts or not marker:
+    if not styles or not scripts:
         sys.exit(f"found no assets to inline - has {source_name} changed?")
+    if source_name in NEEDS_DEFINITIONS and not marker:
+        sys.exit(f"{source_name} has lost its definitions marker")
     scripts += marker
 
     # The link across to the other game has to point at the other *single

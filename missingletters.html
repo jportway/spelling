@@ -2498,7 +2498,7 @@ button {
       </div>
 
       <p class="other-game">
-        Fancy the other one? <a href="wordbuilder.html">Cooper's Word Game →</a>
+        Fancy another? <a href="wordbuilder.html">Word Game →</a> &nbsp;·&nbsp; <a href="lettertracing.html">Letter Tracing →</a>
       </p>
 
       <p class="dedication">Made for Cooper, with love from Dad 💜</p>
@@ -25899,7 +25899,29 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
     if ("h" in record && (!Array.isArray(record.h) || record.h.length > 16)) return false;
     if ("p" in record && (!Array.isArray(record.p) || record.p.length > 16)) return false;
     if ("tries" in record && (!Array.isArray(record.tries) || record.tries.length > 200)) return false;
-    return true;
+    if ("s" in record && (!Array.isArray(record.s) || record.s.length > 8)) return false;
+
+    /* Firestore's own data model, not the rules: an array may not directly
+       contain another array. A record that breaks this comes back as a 400,
+       which is not a rules refusal - and if this check did not know about
+       it, such a record would sit at the head of the queue for ever. */
+    return !nestsArrays(record);
+  }
+
+  function nestsArrays(value, insideArray) {
+    if (Array.isArray(value)) {
+      if (insideArray) return true;
+      for (var i = 0; i < value.length; i++) {
+        if (nestsArrays(value[i], true)) return true;
+      }
+      return false;
+    }
+    if (value && typeof value === "object") {
+      for (var key in value) {
+        if (Object.prototype.hasOwnProperty.call(value, key) && nestsArrays(value[key], false)) return true;
+      }
+    }
+    return false;
   }
 
   /* Records written before sequence numbers existed have no `n`, so they can
@@ -25979,11 +26001,16 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       this.flush();
     },
 
+    /* `meta` names the game and whatever the round is measured in - minutes
+       for the word games, letters for tracing. */
     startRound: function (meta) {
       if (!this.enabled) return;
       round = makeId("r_");
       current = null;
-      push({ k: "round-start", minutes: meta.minutes, game: "missing" });
+      var rec = { k: "round-start", game: (meta && meta.game) || "missing" };
+      if (meta && typeof meta.minutes === "number") rec.minutes = meta.minutes;
+      if (meta && typeof meta.letters === "number") rec.letters = meta.letters;
+      push(rec);
     },
 
     /* A word has appeared and the clock on her thinking starts now.
@@ -26040,18 +26067,42 @@ zucchini|n||Marrow squash plant whose fruit are eaten when small
       current = null;
     },
 
+    /* Only the fields named here are kept, so a summary object can carry
+       whatever a game finds handy without a stray reference ending up in the
+       log. */
     endRound: function (summary) {
       if (!this.enabled) return;
-      push({
-        k: "round-end",
-        words: summary.words,
-        firstGo: summary.firstGo,
-        tricky: summary.tricky,
-        fill: summary.fill,
-        popped: !!summary.popped
+      var rec = { k: "round-end", game: summary.game || "missing" };
+      ["words", "firstGo", "tricky", "fill", "letters", "clean"].forEach(function (key) {
+        if (typeof summary[key] === "number") rec[key] = summary[key];
       });
+      rec.popped = !!summary.popped;
+      push(rec);
       current = null;
       this.flush();
+    },
+
+    /* One attempt at forming one letter, from the tracing game.
+
+       `l` the letter, `st` the rung (1 trace, 2 copy, 3 memory), `a` which
+       attempt at it this was, `ok` whether it came out as that letter, `fm`
+       whether it was formed the taught way, `f` the fault the recogniser
+       named if not, `ms` how long she took, and `s` her strokes - ten points
+       each as whole percentages of the box, so a better recogniser later can
+       re-judge every letter she ever drew. */
+    trace: function (info) {
+      if (!this.enabled) return;
+      push({
+        k: "trace",
+        l: info.letter,
+        st: info.stage,
+        a: info.attempt,
+        ok: !!info.ok,
+        fm: !!info.formed,
+        f: info.fault || null,
+        ms: info.ms || 0,
+        s: (info.strokes || []).slice(0, 8).map(String)
+      });
     },
 
     /* Send what we can, as one atomic commit. Records stay in the queue until

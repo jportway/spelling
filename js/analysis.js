@@ -323,7 +323,7 @@
       var round = ensure(rec.r, rec.t || 0);
       if (rec.t && rec.t < round.at) round.at = rec.t;
 
-      if (rec.k === "round-start") round.minutes = rec.minutes;
+      if (rec.k === "round-start") { round.minutes = rec.minutes; round.game = rec.game || "missing"; }
       if (rec.k === "round-end") {
         round.fill = typeof rec.fill === "number" ? rec.fill : null;
         round.popped = !!rec.popped;
@@ -764,6 +764,69 @@
      below "d" by chance. So each line carries its numbers, and says plainly
      whether the gap is real or just the order they happened to land in.
      ---------------------------------------------------------------------- */
+  /* Letter formation, from the tracing game. Kept apart from the spelling
+     analysis because it answers a different question - not "does she know
+     which letter" but "can her hand make it, and which way round". Same
+     discipline as everywhere else: only her first attempt at a letter counts
+     towards a rate, and every rate carries its count. */
+  function traceReport(records) {
+    var rows = records.filter(function (r) { return r.k === "trace" && typeof r.l === "string"; });
+    if (!rows.length) return null;
+
+    var byLetter = {};
+    var faults = {};
+    rows.forEach(function (r) {
+      var b = byLetter[r.l] || (byLetter[r.l] = {
+        letter: r.l, n: 0, ok: 0, formed: 0, first: 0, firstOk: 0,
+        faults: {}, top: 0, tricky: TRICKY.indexOf(r.l) >= 0
+      });
+      b.n++;
+      if (r.ok) { b.ok++; if (r.st > b.top) b.top = r.st; }
+      if (r.fm) b.formed++;
+      if (r.a === 1) { b.first++; if (r.ok) b.firstOk++; }
+      if (r.f && r.f !== "skipped") {
+        b.faults[r.f] = (b.faults[r.f] || 0) + 1;
+        faults[r.f] = (faults[r.f] || 0) + 1;
+      }
+    });
+
+    var letters = Object.keys(byLetter).map(function (l) {
+      var b = byLetter[l];
+      b.score = wilson(b.firstOk, b.first);
+      b.formedScore = wilson(b.formed, b.ok);
+      b.worst = Object.keys(b.faults).sort(function (x, y) {
+        return b.faults[y] - b.faults[x];
+      })[0] || "";
+      return b;
+    }).sort(function (a, b) {
+      if (a.first < MIN_FOR_RATE && b.first >= MIN_FOR_RATE) return 1;
+      if (b.first < MIN_FOR_RATE && a.first >= MIN_FOR_RATE) return -1;
+      return (a.score.rate || 0) - (b.score.rate || 0);
+    });
+
+    var firsts = rows.filter(function (r) { return r.a === 1; }).sort(function (a, b) {
+      return (a.t || 0) - (b.t || 0) || (a.n || 0) - (b.n || 0);
+    });
+    var half = Math.floor(firsts.length / 2);
+    var cmp = null;
+    if (half >= 1) {
+      var early = firsts.slice(0, half), late = firsts.slice(firsts.length - half);
+      var hits = function (rs) { return rs.filter(function (r) { return r.ok; }).length; };
+      cmp = difference(hits(early), early.length, hits(late), late.length);
+    }
+
+    return {
+      n: rows.length,
+      overall: wilson(firsts.filter(function (r) { return r.ok; }).length, firsts.length),
+      letters: letters,
+      faults: faults,
+      reversals: rows.filter(function (r) { return r.f === "reversal"; }).length,
+      fromMemory: letters.filter(function (b) { return b.top >= 3; })
+                         .map(function (b) { return b.letter; }),
+      progress: { cmp: cmp, say: verdict(cmp), n: firsts.length }
+    };
+  }
+
   function focus(model) {
     var out = [];
 
@@ -969,7 +1032,8 @@
       span: {
         from: rounds.length ? rounds[0].at : null,
         to: rounds.length ? rounds[rounds.length - 1].at : null,
-        rounds: rounds.length,
+        rounds: rounds.filter(function (r) { return r.game !== "trace"; }).length,
+        traceRounds: rounds.filter(function (r) { return r.game === "trace"; }).length,
         words: records.filter(function (r) { return r.k === "word"; }).length,
         devices: Object.keys(attempts.reduce(function (set, a) {
           set[a.device] = true; return set;
@@ -1047,6 +1111,8 @@
     model.unlisted = model.letters.filter(function (l) {
       return !l.tricky && l.n < MIN_FOR_RATE;
     });
+
+    model.traces = traceReport(records);
 
     model.focus = focus(model);
     return model;

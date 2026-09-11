@@ -94,6 +94,10 @@ service cloud.firestore {
              && (!('h' in rec) || (rec.h is list && rec.h.size() <= 16))
              && (!('p' in rec) || (rec.p is list && rec.p.size() <= 16))
 
+             // The tracing game's strokes: at most eight, each a short list
+             // of numbers.
+             && (!('s' in rec) || (rec.s is list && rec.s.size() <= 8))
+
              // One round of stubbornness on one word, generously. Beyond this
              // it is not a child trying letters.
              && (!('tries' in rec) || (rec.tries is list && rec.tries.size() <= 200));
