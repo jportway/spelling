@@ -372,6 +372,34 @@ the page shows what she drew over what it should have been, marks where the
 ball belongs, and says it: *"That's a d — the ball went left. A b has its ball
 on the right."* Then the ghost finger draws it again, and she has another go.
 
+### When something goes wrong
+
+The game once froze on every letter she got right. One decorative sound was
+called with a missing argument, which produced a note with a frequency of
+"not a number", which the browser's audio engine refuses by throwing — in the
+middle of the cheer, before the timer that moves on to the next letter had
+been set. The board was already locked for the celebration, so drawing, Clear,
+Skip and Show me went with it. The tests did not catch it because they muted
+the sound to stay quiet, and the broken function returns early when muted.
+
+So three things now hold, and are worth keeping:
+
+- **Tests run with everything switched on.** Muting a subsystem in a test
+  mutes its bugs. Sound and speech stay enabled; the assertions are on page
+  errors instead.
+- **Decoration cannot stop the game.** Sounds, speech, the kitten and the
+  confetti all go through `safely()` in `js/trace.js`, and the puffs hand the
+  round back on a timer rather than when an animation says so.
+- **A board that stops, restarts itself.** Every pause between letters is
+  meant to end in a couple of seconds. If one has not ended after seven, the
+  round moves on by itself. It cannot repair the cause, but a seven year old
+  cannot tell a stopped game from a thinking one, and should not have to.
+
+Settings shows the **version** and anything that has gone wrong this session,
+because a fault on a tablet in another room is otherwise invisible. Every
+stylesheet and script is fetched with a `?v=` on the end, so a tablet holding
+an old copy in its cache is made to take the new one.
+
 ### How it judges a letter
 
 `js/recogniser.js`, with no DOM in it, answers two questions separately

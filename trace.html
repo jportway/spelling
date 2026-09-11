@@ -7,10 +7,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Cooper's Letter Tracing</title>
-<link rel="stylesheet" href="css/styles.css">
-<link rel="stylesheet" href="css/kitten.css">
-<link rel="stylesheet" href="css/missing.css">
-<link rel="stylesheet" href="css/trace.css">
+<link rel="stylesheet" href="css/styles.css?v=2026-09-11.2">
+<link rel="stylesheet" href="css/kitten.css?v=2026-09-11.2">
+<link rel="stylesheet" href="css/missing.css?v=2026-09-11.2">
+<link rel="stylesheet" href="css/trace.css?v=2026-09-11.2">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✏️</text></svg>">
 </head>
 <body class="game-trace">
@@ -384,22 +384,31 @@
       </div>
     </div>
 
+    <!-- Which copy of the game this is, and anything that has gone wrong
+         inside it. A tablet can hold on to an old copy of the code for a
+         good while, and without this there is no way to tell from the
+         outside which one is running. -->
+    <div class="logbook">
+      <p class="logbook-note">Version <strong id="buildStamp">-</strong></p>
+      <p class="logbook-status" id="hiccups"></p>
+    </div>
+
     <div class="panel-actions">
       <button class="btn btn-play" id="settingsCloseBtn" type="button">Done</button>
     </div>
   </div>
 </div>
 
-<script src="js/letters.js"></script>
-<script src="js/speech.js"></script>
-<script src="js/sound.js"></script>
-<script src="js/confetti.js"></script>
-<script src="js/kitten.js"></script>
-<script src="js/logbook.js"></script>
-<script src="js/balloon.js"></script>
-<script src="js/reward.js"></script>
-<script src="js/strokes.js"></script>
-<script src="js/recogniser.js"></script>
-<script src="js/trace.js"></script>
+<script src="js/letters.js?v=2026-09-11.2"></script>
+<script src="js/speech.js?v=2026-09-11.2"></script>
+<script src="js/sound.js?v=2026-09-11.2"></script>
+<script src="js/confetti.js?v=2026-09-11.2"></script>
+<script src="js/kitten.js?v=2026-09-11.2"></script>
+<script src="js/logbook.js?v=2026-09-11.2"></script>
+<script src="js/balloon.js?v=2026-09-11.2"></script>
+<script src="js/reward.js?v=2026-09-11.2"></script>
+<script src="js/strokes.js?v=2026-09-11.2"></script>
+<script src="js/recogniser.js?v=2026-09-11.2"></script>
+<script src="js/trace.js?v=2026-09-11.2"></script>
 </body>
 </html>
