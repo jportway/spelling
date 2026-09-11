@@ -22,10 +22,23 @@
     return ctx;
   }
 
+  /* Web Audio throws on a non-finite number rather than ignoring it, and a
+     throw from in here lands in the middle of whichever game called it -
+     which once left a game frozen mid-cheer, unable to carry on. A sound is
+     decoration: if the numbers are wrong, the right answer is silence. */
+  function sane() {
+    for (var i = 0; i < arguments.length; i++) {
+      var v = arguments[i];
+      if (typeof v !== "number" || !isFinite(v)) return false;
+    }
+    return true;
+  }
+
   /* One note. `type` shapes the timbre, the gain envelope stops it clicking. */
   function note(freq, start, length, level, type) {
     var audio = context();
     if (!audio) return;
+    if (!sane(freq, start, length, level) || freq <= 0 || level <= 0) return;
 
     var osc = audio.createOscillator();
     var gain = audio.createGain();
@@ -47,6 +60,7 @@
   function slide(from, to, start, length, level) {
     var audio = context();
     if (!audio) return;
+    if (!sane(from, to, start, length, level) || from <= 0 || to <= 0 || level <= 0) return;
 
     var osc = audio.createOscillator();
     var gain = audio.createGain();
@@ -73,6 +87,8 @@
   function noise(start, length, level, cutoff) {
     var audio = context();
     if (!audio) return;
+    if (!sane(start, length, level) || length <= 0 || level <= 0) return;
+    if (cutoff !== undefined && (!sane(cutoff) || cutoff <= 0)) return;
 
     var frames = Math.max(1, Math.floor(audio.sampleRate * length));
     var buffer = audio.createBuffer(1, frames, audio.sampleRate);
@@ -170,10 +186,13 @@
       }
     },
 
-    /* Longer words get a longer run up the scale. */
+    /* Longer words get a longer run up the scale. Called without a length -
+       by a game where the thing being celebrated is not a word - it plays
+       the middling cheer rather than working out a run of NaN notes. */
     success: function (length) {
       if (!this.enabled) return;
-      var steps = Math.min(CHEER.length, Math.max(3, length - 1));
+      var size = (typeof length === "number" && isFinite(length)) ? length : 4;
+      var steps = Math.min(CHEER.length, Math.max(3, size - 1));
       for (var i = 0; i < steps; i++) {
         note(CHEER[i], i * 0.075, 0.3, 0.16, "sine");
       }
