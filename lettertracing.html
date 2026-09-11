@@ -3225,10 +3225,23 @@ body.calm .puff-fly { transition-duration: .2s; }
     return ctx;
   }
 
+  /* Web Audio throws on a non-finite number rather than ignoring it, and a
+     throw from in here lands in the middle of whichever game called it -
+     which once left a game frozen mid-cheer, unable to carry on. A sound is
+     decoration: if the numbers are wrong, the right answer is silence. */
+  function sane() {
+    for (var i = 0; i < arguments.length; i++) {
+      var v = arguments[i];
+      if (typeof v !== "number" || !isFinite(v)) return false;
+    }
+    return true;
+  }
+
   /* One note. `type` shapes the timbre, the gain envelope stops it clicking. */
   function note(freq, start, length, level, type) {
     var audio = context();
     if (!audio) return;
+    if (!sane(freq, start, length, level) || freq <= 0 || level <= 0) return;
 
     var osc = audio.createOscillator();
     var gain = audio.createGain();
@@ -3250,6 +3263,7 @@ body.calm .puff-fly { transition-duration: .2s; }
   function slide(from, to, start, length, level) {
     var audio = context();
     if (!audio) return;
+    if (!sane(from, to, start, length, level) || from <= 0 || to <= 0 || level <= 0) return;
 
     var osc = audio.createOscillator();
     var gain = audio.createGain();
@@ -3276,6 +3290,8 @@ body.calm .puff-fly { transition-duration: .2s; }
   function noise(start, length, level, cutoff) {
     var audio = context();
     if (!audio) return;
+    if (!sane(start, length, level) || length <= 0 || level <= 0) return;
+    if (cutoff !== undefined && (!sane(cutoff) || cutoff <= 0)) return;
 
     var frames = Math.max(1, Math.floor(audio.sampleRate * length));
     var buffer = audio.createBuffer(1, frames, audio.sampleRate);
@@ -3373,10 +3389,13 @@ body.calm .puff-fly { transition-duration: .2s; }
       }
     },
 
-    /* Longer words get a longer run up the scale. */
+    /* Longer words get a longer run up the scale. Called without a length -
+       by a game where the thing being celebrated is not a word - it plays
+       the middling cheer rather than working out a run of NaN notes. */
     success: function (length) {
       if (!this.enabled) return;
-      var steps = Math.min(CHEER.length, Math.max(3, length - 1));
+      var size = (typeof length === "number" && isFinite(length)) ? length : 4;
+      var steps = Math.min(CHEER.length, Math.max(3, size - 1));
       for (var i = 0; i < steps; i++) {
         note(CHEER[i], i * 0.075, 0.3, 0.16, "sine");
       }
@@ -5652,8 +5671,17 @@ body.calm .puff-fly { transition-duration: .2s; }
   var TRACE_POINTS = 48;
 
   /* Free drawing: how long after lifting her finger before we assume the
-     letter is finished. Long enough to lift for an i-dot or a t-bar. */
-  var SETTLE_MS = 1000;
+     letter is finished. Long enough to lift for an i-dot or a t-bar, and
+     long enough for a seven year old to think about where the next bit
+     goes - a second is not, when the bit in question is the bowl of a b. */
+  var SETTLE_MS = 1500;
+
+  /* A template stroke this short is a dot, not a journey: the i and the j
+     wear one. There is nothing to travel along, so it is tapped. */
+  var DOT_LENGTH = 0.05;
+
+  /* Failed goes at one stroke before she gets shown it again. */
+  var STROKE_HELP_AFTER = 2;
 
   /* The ghost finger. */
   var DEMO_SPEED = 0.75;            // box-widths per second
@@ -5704,6 +5732,7 @@ body.calm .puff-fly { transition-duration: .2s; }
     traceIndex: 0,          // which template stroke she is on
     traceHit: -1,           // furthest template point reached on it
     traced: [],             // per template stroke: did she get it
+    strokeTries: 0,         // failed goes at the stroke she is on now
 
     settle: null,
     advance: null,
@@ -5714,6 +5743,20 @@ body.calm .puff-fly { transition-duration: .2s; }
   };
 
   function byId(id) { return document.getElementById(id); }
+
+  /* The sounds, the speech, the kitten and the confetti are decoration. A
+     throw from any of them used to take the round with it: the cheer would
+     stop half way through, the timer that moves on to the next letter would
+     never be set, and the board stayed locked until the page was reloaded -
+     which is exactly what a missing argument to one sound did. Nothing
+     decorative is worth a frozen game, so all of it goes through here. */
+  function safely(what) {
+    try {
+      what();
+    } catch (err) {
+      if (global.console && global.console.warn) global.console.warn("trace: " + err.message);
+    }
+  }
 
   // ------------------------------------------------------------------------
   // storage
@@ -5927,6 +5970,7 @@ body.calm .puff-fly { transition-duration: .2s; }
 
     var template = currentTemplate();
     var colour = inkFor(state.letter);
+    var startMarker = null;
 
     if (state.demo) {
       drawDemoFrame(template, colour);
@@ -5939,7 +5983,14 @@ body.calm .puff-fly { transition-duration: .2s; }
     }
 
     if (state.stage === 1) {
-      drawGuide(template);
+      /* One bit at a time. The whole letter used to be drawn as one bright
+         road, which invites tracing it in a single sweep - and then only
+         the first stroke counts. The bit she is on now is the bright one;
+         the rest is there faintly so the letter is still a letter. */
+      var others = template.filter(function (s, i) { return i !== state.traceIndex; });
+      if (others.length) drawGuide(others, 0.3);
+      if (state.traceIndex < template.length) drawGuide([template[state.traceIndex]], 1);
+
       // The part she has already covered, lit in her colour.
       var resampled = traceTemplate();
       for (var i = 0; i < state.traceIndex; i++) {
@@ -5948,23 +5999,44 @@ body.calm .puff-fly { transition-duration: .2s; }
       if (state.traceIndex < resampled.length) {
         var s = resampled[state.traceIndex];
         if (state.traceHit >= 0) drawInk([s.slice(0, state.traceHit + 1)], colour, 0.11, 0.55);
-        drawStart(template[state.traceIndex], state.traceIndex + 1);
+        startMarker = template[state.traceIndex];
       }
     }
 
     drawInk(state.strokes, colour);
     if (state.current) drawInk([state.current], colour);
+
+    /* The green dot goes on last, so her own ink cannot bury it. On a b the
+       ball starts against the stick she has just this moment drawn, and the
+       dot telling her where to begin was hidden underneath it. */
+    if (startMarker) drawStart(startMarker, state.traceIndex + 1);
   }
 
-  var traceCache = { letter: null, strokes: null };
+  function pathLength(points) {
+    var total = 0;
+    for (var i = 1; i < points.length; i++) {
+      total += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+    }
+    return total;
+  }
+
+  var traceCache = { letter: null, strokes: null, dots: null };
   function traceTemplate() {
     if (traceCache.letter !== state.letter) {
       traceCache.letter = state.letter;
       traceCache.strokes = currentTemplate().map(function (s) {
         return global.Recogniser.resample(s, TRACE_POINTS);
       });
+      traceCache.dots = traceCache.strokes.map(function (s) {
+        return pathLength(s) < DOT_LENGTH;
+      });
     }
     return traceCache.strokes;
+  }
+
+  function strokeIsDot(index) {
+    traceTemplate();
+    return !!(traceCache.dots && traceCache.dots[index]);
   }
 
   // ------------------------------------------------------------------------
@@ -6145,6 +6217,7 @@ body.calm .puff-fly { transition-duration: .2s; }
     state.traceIndex = 0;
     state.traceHit = -1;
     state.traced = [];
+    state.strokeTries = 0;
     global.clearTimeout(state.settle);
     state.settle = null;
   }
@@ -6205,8 +6278,13 @@ body.calm .puff-fly { transition-duration: .2s; }
     global.clearTimeout(state.settle);
     state.settle = null;
     state.current = [boxPoint(event)];
-    if (state.stage === 1) state.traceHit = -1;
-    global.Sound.pick();
+    /* Where she puts her finger down counts. It used to be ignored - only
+       movement was measured - so a tap was worth nothing at all. */
+    if (state.stage === 1) {
+      state.traceHit = -1;
+      followTrace(state.current[0]);
+    }
+    safely(function () { global.Sound.pick(); });
     draw();
   }
 
@@ -6242,6 +6320,17 @@ body.calm .puff-fly { transition-duration: .2s; }
     var resampled = traceTemplate();
     if (state.traceIndex >= resampled.length) return;
     var s = resampled[state.traceIndex];
+
+    /* A dot has no journey in it: all forty-eight of its points sit in the
+       same place, so measuring how far along she has got measures nothing,
+       and the cap on how fast that measure may move meant a tap could never
+       finish one. The dot on an i was untraceable. Touch it and it is
+       done - which is what tapping a dot ought to mean. */
+    if (strokeIsDot(state.traceIndex)) {
+      if (Math.hypot(p[0] - s[0][0], p[1] - s[0][1]) <= CORRIDOR) state.traceHit = s.length - 1;
+      return;
+    }
+
     var from = Math.max(0, state.traceHit - 3);
     var to = Math.min(s.length - 1, state.traceHit + 4);
     for (var i = from; i <= to; i++) {
@@ -6270,6 +6359,24 @@ body.calm .puff-fly { transition-duration: .2s; }
     draw();
   }
 
+  /* Why the stroke did not count, in the terms she can act on. It used to
+     say "start at the green dot" however far she had got, which is no use
+     at all to a child who started in the right place and stopped an inch
+     short. */
+  function missedWhy(covered) {
+    if (covered <= 0) return "Start on the green dot and follow the arrow";
+    if (covered < 0.5) return "Good start - now keep going, all the way along";
+    return "Nearly! Follow it right to the end";
+  }
+
+  /* Short on purpose: this sits under the box on a tablet held in one hand,
+     and a line that wraps pushes the drawing box about. */
+  var NEXT_BIT = [
+    "Good. Now the next bit",
+    "And now the next bit",
+    "One more bit"
+  ];
+
   function finishTraceStroke(stroke) {
     var resampled = traceTemplate();
     var covered = (state.traceHit + 1) / TRACE_POINTS;
@@ -6278,19 +6385,36 @@ body.calm .puff-fly { transition-duration: .2s; }
       // Not far enough along. Not a failure - the ink just fades, and the
       // start dot is still there.
       state.traceHit = -1;
-      global.Sound.nudge();
-      setMessage("Start at the green dot and follow the arrow", "nudge");
-      global.Kitten.react("nudge");
+      state.strokeTries += 1;
+      safely(function () { global.Sound.nudge(); });
+      setMessage(missedWhy(covered), "nudge");
+      safely(function () { global.Kitten.react("nudge"); });
+
+      /* Two goes at the same bit and she has run out of things to try on
+         her own. Show her again rather than leave her guessing. */
+      if (state.strokeTries >= STROKE_HELP_AFTER) {
+        state.strokeTries = 0;
+        startDemo(function () { draw(); });
+      }
       return;
     }
 
     state.strokes.push(stroke);
     state.traceIndex += 1;
     state.traceHit = -1;
-    global.Sound.place();
-    setMessage("", "");
+    state.strokeTries = 0;
+    safely(function () { global.Sound.place(); });
 
-    if (state.traceIndex >= resampled.length) finishLetter();
+    if (state.traceIndex >= resampled.length) {
+      setMessage("", "");
+      finishLetter();
+      return;
+    }
+
+    /* There is more of the letter to go. Saying nothing here is how a letter
+       drawn in one long sweep ends up looking ignored: the first bit goes
+       in, and the board just sits there. */
+    setMessage(NEXT_BIT[Math.min(state.traceIndex - 1, NEXT_BIT.length - 1)], "good");
   }
 
   // ------------------------------------------------------------------------
@@ -6317,10 +6441,13 @@ body.calm .puff-fly { transition-duration: .2s; }
       verdict.cue = "That's " + global.Recogniser.article(state.letter) + "!";
     }
 
-    global.Logbook.trace({
-      letter: state.letter, stage: state.stage, attempt: state.attempt,
-      ok: verdict.ok, formed: verdict.formed, fault: verdict.fault, ms: ms,
-      strokes: global.Recogniser.compact(state.strokes)
+    // Keeping the log is worth doing and never worth stopping her for.
+    safely(function () {
+      global.Logbook.trace({
+        letter: state.letter, stage: state.stage, attempt: state.attempt,
+        ok: verdict.ok, formed: verdict.formed, fault: verdict.fault, ms: ms,
+        strokes: global.Recogniser.compact(state.strokes)
+      });
     });
 
     var rec = letterRecord(state.letter);
@@ -6363,13 +6490,17 @@ body.calm .puff-fly { transition-duration: .2s; }
     draw();
 
     setMessage(verdict.cue, "good");
-    if (settings.autoSay) global.Speech.say(verdict.cue, { rate: 0.95 });
-    global.Sound.success();
-    global.Kitten.react(clean ? "bigcheer" : "cheer");
-    if (clean) global.Confetti.burstFrom(canvas, 0.9);
+    safely(function () { if (settings.autoSay) global.Speech.say(verdict.cue, { rate: 0.95 }); });
+    // The cheer wants a size. It used to be called without one, which made a
+    // run of NaN notes, which threw, which froze the round on every letter
+    // she got right. Harder rungs now get a bigger cheer.
+    safely(function () { global.Sound.success(3 + puffs); });
+    safely(function () { global.Kitten.react(clean ? "bigcheer" : "cheer"); });
+    safely(function () { if (clean) global.Confetti.burstFrom(canvas, 0.9); });
 
     flyPuffs(puffs, function () {
-      var popped = global.Balloon.add(puffs);
+      var popped = false;
+      safely(function () { popped = global.Balloon.add(puffs); });
       state.banked += puffs;
       if (popped) return;                          // burstRound takes it from here
       state.advance = global.setTimeout(function () {
@@ -6390,9 +6521,9 @@ body.calm .puff-fly { transition-duration: .2s; }
     draw();
 
     setMessage(verdict.cue, "nudge");
-    if (settings.autoSay) global.Speech.say(verdict.cue, { rate: 0.9 });
-    global.Sound.nudge();
-    global.Kitten.react("nudge");
+    safely(function () { if (settings.autoSay) global.Speech.say(verdict.cue, { rate: 0.9 }); });
+    safely(function () { global.Sound.nudge(); });
+    safely(function () { global.Kitten.react("nudge"); });
 
     state.advance = global.setTimeout(function () {
       state.feedback = null;
@@ -6420,35 +6551,48 @@ body.calm .puff-fly { transition-duration: .2s; }
   /* The puffs fly from the box to the balloon, as they do from the word in
      the other game, so the two feel like one thing. */
   function flyPuffs(count, then) {
-    var from = canvas.getBoundingClientRect();
-    var to = global.Balloon.element().getBoundingClientRect();
-    var n = Math.min(count, 5);
-    var landed = 0;
+    var n = Math.max(0, Math.min(count | 0, 5));
+    var fired = false;
 
-    for (var i = 0; i < n; i++) {
-      (function (i) {
-        var puff = document.createElement("span");
-        puff.className = "puff-fly";
-        puff.textContent = "•";
-        puff.style.color = inkFor(state.letter);
-        puff.style.left = (from.left + from.width / 2 + (i - n / 2) * 14) + "px";
-        puff.style.top = (from.top + from.height * 0.45) + "px";
-        document.body.appendChild(puff);
-        global.requestAnimationFrame(function () {
-          puff.style.transitionDelay = (i * 60) + "ms";
-          puff.style.transform = "translate(" +
-            (to.left + to.width / 2 - (from.left + from.width / 2 + (i - n / 2) * 14)) + "px, " +
-            (to.top + to.height / 2 - (from.top + from.height * 0.45)) + "px) scale(.5)";
-          puff.style.opacity = "0";
-        });
-        global.setTimeout(function () {
-          if (puff.parentNode) puff.parentNode.removeChild(puff);
-          landed += 1;
-          if (landed === n) { global.Sound.inflate(); then(); }
-        }, 620 + i * 60);
-      })(i);
+    /* The round carries on from here, so this has to run whatever became of
+       the animation. It used to be called by whichever puff landed last,
+       which meant a puff that was never made - or a sound that threw on its
+       way out - stopped the game dead. One timer, one call, always. */
+    function land() {
+      if (fired) return;
+      fired = true;
+      safely(function () { global.Sound.inflate(global.Balloon.fill()); });
+      then();
     }
-    if (!n) then();
+
+    safely(function () {
+      var from = canvas.getBoundingClientRect();
+      var to = global.Balloon.element().getBoundingClientRect();
+
+      for (var i = 0; i < n; i++) {
+        (function (i) {
+          var puff = document.createElement("span");
+          puff.className = "puff-fly";
+          puff.textContent = "•";
+          puff.style.color = inkFor(state.letter);
+          puff.style.left = (from.left + from.width / 2 + (i - n / 2) * 14) + "px";
+          puff.style.top = (from.top + from.height * 0.45) + "px";
+          document.body.appendChild(puff);
+          global.requestAnimationFrame(function () {
+            puff.style.transitionDelay = (i * 60) + "ms";
+            puff.style.transform = "translate(" +
+              (to.left + to.width / 2 - (from.left + from.width / 2 + (i - n / 2) * 14)) + "px, " +
+              (to.top + to.height / 2 - (from.top + from.height * 0.45)) + "px) scale(.5)";
+            puff.style.opacity = "0";
+          });
+          global.setTimeout(function () {
+            if (puff.parentNode) puff.parentNode.removeChild(puff);
+          }, 620 + i * 60);
+        })(i);
+      }
+    });
+
+    global.setTimeout(land, n ? 620 + n * 60 : 0);
   }
 
   function setMessage(text, kind) {
@@ -6700,12 +6844,17 @@ body.calm .puff-fly { transition-duration: .2s; }
     dom.resumeBtn.addEventListener("click", resumeRound);
     dom.quitBtn.addEventListener("click", function () { endRound(true); });
 
+    /* Show me and Skip are the two ways out of being stuck, so neither may
+       be refused while the board is locked - that is the moment they are
+       wanted. Both cancel whatever the board was waiting for. */
     dom.showBtn.addEventListener("click", function () {
-      if (!state.running || state.paused || state.demo) return;
-      if (state.feedback) return;
+      if (!state.running || state.paused || state.demo || !state.letter) return;
+      global.clearTimeout(state.advance);
       global.clearTimeout(state.settle);
+      state.feedback = null;
       resetInk();
       say(state.letter, true);
+      setMessage("", "");
       startDemo(function () { state.startedAt = global.performance.now(); draw(); });
     });
     dom.sayBtn.addEventListener("click", function () {
@@ -6722,12 +6871,26 @@ body.calm .puff-fly { transition-duration: .2s; }
     });
     dom.doneBtn.addEventListener("click", function () { finishLetter(); });
     dom.skipBtn.addEventListener("click", function () {
-      if (!state.running || state.locked) return;
-      global.Logbook.trace({
-        letter: state.letter, stage: state.stage, attempt: state.attempt + 1,
-        ok: false, formed: false, fault: "skipped", ms: 0, strokes: []
-      });
-      state.done += 1;
+      if (!state.running || state.demo || !state.letter) return;
+      global.clearTimeout(state.advance);
+      global.clearTimeout(state.settle);
+
+      /* Pressed during the cheer for a letter she has just got right, this
+         is "get on with it", not "skip this one": that letter is already
+         counted and logged, and must not be counted or logged twice. */
+      var alreadyCounted = !!(state.feedback && state.feedback.good);
+      if (!alreadyCounted) {
+        safely(function () {
+          global.Logbook.trace({
+            letter: state.letter, stage: state.stage, attempt: state.attempt + 1,
+            ok: false, formed: false, fault: "skipped", ms: 0, strokes: []
+          });
+        });
+        state.done += 1;
+      }
+
+      state.feedback = null;
+      state.locked = false;
       if (state.done >= state.perRound) endRound(false); else nextLetter();
     });
 
