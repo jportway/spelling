@@ -49,6 +49,11 @@ _asset_cache: dict[str, str] = {}
 
 
 def read_asset(reference: str) -> str:
+    # The pages hang a ?v=... on every local asset so that a tablet holding an
+    # old copy in its cache is made to fetch the new one. That is a hint to a
+    # web server and has nothing to do with the file on disk.
+    reference = reference.split("?", 1)[0]
+
     if reference in _asset_cache:
         return _asset_cache[reference]
 

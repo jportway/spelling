@@ -34,6 +34,12 @@
   var STORE_KEY = "cooper.trace.v1";
   var SETTINGS_KEY = "cooper.settings.v1";
 
+  /* Shown in Settings. A tablet can serve an old copy of this file from its
+     cache long after a new one is published, and from the outside the two
+     are indistinguishable - so the game says which one it is. Bump it with
+     any change worth telling apart. */
+  var BUILD = "2026-09-11.2";
+
   var STAGES = ["watch", "trace", "copy", "memory"];
   var FIRST_STAGE = 1;             // where a new letter starts
   var TOP_STAGE = 3;
@@ -70,6 +76,14 @@
 
   var ADVANCE_MS = 1300;            // pause after a good letter
   var CORRECTION_MS = 2400;         // long enough to actually look at it
+
+  /* Nothing may leave the board stopped. Every pause after a letter is
+     meant to end in a few seconds, so if one has not ended after this long,
+     something has gone wrong that she cannot possibly diagnose - and a
+     seven year old looking at a game that has quietly stopped has no way of
+     telling it apart from a game that is thinking. The round moves itself
+     on instead. */
+  var STUCK_MS = 7000;
 
   var DEFAULT_SETTINGS = {
     rewardVideo: true,
@@ -117,6 +131,7 @@
 
     settle: null,
     advance: null,
+    watchdog: null,         // the backstop that unsticks a stopped board
     demo: null,             // the ghost finger animation
     demoAt: 0,
     feedback: null,         // what to draw over her ink after judging
@@ -124,6 +139,21 @@
   };
 
   function byId(id) { return document.getElementById(id); }
+
+  /* The last few things that went wrong, shown in Settings. Catching them is
+     not the point - being able to see them from the other end of a phone
+     call, on a tablet with no developer console, is. */
+  var hiccups = [];
+
+  function noteHiccup(what) {
+    hiccups.push(what);
+    if (hiccups.length > 4) hiccups.shift();
+  }
+
+  global.addEventListener("error", function (event) {
+    noteHiccup((event.message || "something broke")
+      + (event.lineno ? " (line " + event.lineno + ")" : ""));
+  });
 
   /* The sounds, the speech, the kitten and the confetti are decoration. A
      throw from any of them used to take the round with it: the cheer would
@@ -135,6 +165,9 @@
     try {
       what();
     } catch (err) {
+      /* Kept, and shown in Settings. Something that goes wrong silently on a
+         tablet on the other side of the country cannot be fixed. */
+      noteHiccup((err && err.message) || String(err));
       if (global.console && global.console.warn) global.console.warn("trace: " + err.message);
     }
   }
@@ -541,6 +574,26 @@
   // a letter
   // ------------------------------------------------------------------------
 
+  /* The backstop. Every pause between letters is supposed to end on a timer
+     of its own; this one only ever fires if one of those did not. It cannot
+     fix whatever went wrong, but it can stop the game sitting there. */
+  function armWatchdog() {
+    global.clearTimeout(state.watchdog);
+    state.watchdog = global.setTimeout(function () {
+      if (!state.running || !state.locked) return;      // all well
+      if (state.demo) { armWatchdog(); return; }        // she is being shown, wait
+      noteHiccup("the board stopped after a letter; moved on by itself");
+      if (global.console && global.console.warn) {
+        global.console.warn("trace: the board stopped; moving on by itself");
+      }
+      state.locked = false;
+      state.feedback = null;
+      global.clearTimeout(state.advance);
+      if (state.done >= state.perRound) endRound(false);
+      else nextLetter();
+    }, STUCK_MS);
+  }
+
   function nextLetter() {
     if (!state.running) return;
     var letter = pickLetter(state.letter);
@@ -552,6 +605,7 @@
     // a correction on screen, a timer about to move on.
     stopDemo();
     global.clearTimeout(state.advance);
+    global.clearTimeout(state.watchdog);
     state.feedback = null;
 
     state.letter = letter;
@@ -567,15 +621,15 @@
     dom.doneBtn.hidden = true;
 
     setMessage("", "");
-    global.Kitten.setState("watching");
+    safely(function () { global.Kitten.setState("watching"); });
 
     // A trace always opens with the demo; the other rungs say the letter
     // and wait, with "Show me" a tap away.
     if (state.stage === 1) {
-      say(letter, true);
+      safely(function () { say(letter, true); });
       startDemo(function () { state.startedAt = global.performance.now(); draw(); });
     } else {
-      say(letter, state.stage === 3);
+      safely(function () { say(letter, state.stage === 3); });
       state.startedAt = global.performance.now();
       draw();
     }
@@ -868,6 +922,7 @@
     state.feedback = { good: true };
     state.locked = true;
     state.done += 1;
+    armWatchdog();
     draw();
 
     setMessage(verdict.cue, "good");
@@ -899,6 +954,7 @@
 
     state.feedback = { good: false, fault: verdict.fault };
     state.locked = true;
+    armWatchdog();
     draw();
 
     setMessage(verdict.cue, "nudge");
@@ -1050,6 +1106,7 @@
     state.locked = true;
     global.clearTimeout(state.advance);
     global.clearTimeout(state.settle);
+    global.clearTimeout(state.watchdog);
     stopDemo();
     global.Speech.stop();
     dom.app.classList.remove("is-paused");
@@ -1186,6 +1243,15 @@
       : info.last.ok ? "Last upload worked " + agoText(info.last.at) + " (" + info.last.sent + " records)."
       : "Last upload failed " + agoText(info.last.at) + ". " + info.last.why;
     if (info.last) line.className += info.last.ok ? " is-ok" : " is-bad";
+
+    if (dom.buildStamp) dom.buildStamp.textContent = BUILD;
+    if (dom.hiccups) {
+      dom.hiccups.className = "logbook-status" + (hiccups.length ? " is-bad" : "");
+      dom.hiccups.textContent = hiccups.length
+        ? "Something went wrong " + hiccups.length + (hiccups.length === 1 ? " time" : " times")
+          + " this session: " + hiccups.join("; ")
+        : "Nothing has gone wrong this session.";
+    }
   }
 
   function wireLogbook() {
@@ -1349,6 +1415,7 @@
      "wobblyBlock", "wobblyList", "againBtn", "homeBtn", "helpScreen", "helpCards",
      "helpCloseBtn", "settingsScreen", "settingsCloseBtn", "logbookCount",
      "logbookStatus", "logbookSendBtn", "logbookExportBtn", "rewardScreen",
+     "buildStamp", "hiccups",
      "rewardFrame", "rewardParty", "rewardDoneBtn"
     ].forEach(function (id) { dom[id] = byId(id); });
   }
