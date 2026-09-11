@@ -713,6 +713,55 @@
           + "list or to the top of it." }));
   }
 
+  /* The tracing game: can her hand make each letter. Hidden until there is
+     any of it in the log. */
+  function renderTraces() {
+    var t = model.traces;
+    dom.tracesSection.hidden = !t;
+    if (!t) return;
+
+    dom.traceTiles.innerHTML = "";
+    [
+      tile(pct(t.overall.rate), "letters right first go",
+           t.overall.n + " first tries, " + pct(t.overall.lo) + "–" + pct(t.overall.hi)),
+      tile(String(t.reversals), "reversals",
+           t.reversals ? "b↔d or p↔q the wrong way round" : "none logged"),
+      tile(String(t.fromMemory.length), "drawn from memory",
+           t.fromMemory.length ? t.fromMemory.sort().join(" ") : "none yet"),
+      tile(String(t.n), "attempts", model.span.traceRounds + " rounds")
+    ].forEach(function (x) { dom.traceTiles.appendChild(x); });
+
+    var p = t.progress;
+    dom.traceVerdict.textContent = p.cmp && p.cmp.delta !== null
+      ? "First half " + pct(p.cmp.before.rate) + " (" + p.cmp.before.n + " letters), second half "
+        + pct(p.cmp.after.rate) + " (" + p.cmp.after.n + "). " + capitalise(p.say.moved) + "."
+      : "Not enough letters to compare a before and an after yet.";
+
+    dom.traceLetters.innerHTML = "";
+    var faultName = {
+      reversal: "wrong way round", humps: "wrong number of humps",
+      "wrong-end": "started at the wrong end", order: "strokes in the wrong order",
+      "wrong-way": "went round the wrong way", strokes: "lifted in the wrong places",
+      size: "wrong size", wobbly: "wobbly", "wrong-letter": "came out as another letter"
+    };
+    t.letters.forEach(function (l) {
+      var thin = l.first < A.MIN_FOR_RATE;
+      dom.traceLetters.appendChild(el("div", {
+        "class": "letter-row" + (thin ? " is-thin" : "")
+      }, [
+        el("div", { "class": "glyph", "data-letter": l.letter, text: l.letter }),
+        el("div", {}, [
+          el("div", { "class": "figure", text: thin ? "–" : pct(l.score.rate) }),
+          el("div", { "class": "count", text: l.firstOk + "/" + l.first })
+        ]),
+        masteryBar(l.score, colourFor(l.letter)),
+        el("div", { "class": "note-inline", text: thin ? "too few to rank"
+          : (["", "tracing", "copying", "from memory"][l.top] || "not yet")
+            + (l.worst ? " · " + (faultName[l.worst] || l.worst) : "") })
+      ]));
+    });
+  }
+
   function bandTable(rows, headings, nameOf) {
     return el("div", { "class": "scroller" }, [
       el("table", {}, [
@@ -770,10 +819,10 @@
       return;
     }
 
-    if (!model.attempts.length) {
-      fail("No attempts in that file. It parsed, but there are no “word” "
-         + "records with tries in it — check it is the logs collection and "
-         + "not something else.");
+    if (!model.attempts.length && !(model.traces && model.traces.n)) {
+      fail("No attempts in that file. It parsed, but there are no “word” or "
+         + "“trace” records in it — check it is the logs collection and not "
+         + "something else.");
       return;
     }
 
@@ -790,6 +839,7 @@
     renderPace();
     renderWords();
     renderShape();
+    renderTraces();
 
     global.ANALYTICS_MODEL = model;      // for the tests, and for a console poke
     document.title = "Practice log — " + model.span.rounds + " rounds";
@@ -935,6 +985,7 @@
     ["tiles", "poolNote", "focus", "letters", "matrixWrap", "pairs",
      "overallTrend", "overallVerdict", "smalls", "paceChart", "paceLegend",
      "paceVerdict", "rushing", "words", "positions", "stamina", "grades",
+     "tracesSection", "traceTiles", "traceVerdict", "traceLetters",
      "report", "dropzone", "error", "pick", "pickBtn", "liveBtn",
      "refreshBtn", "who", "needsReader", "readerSnippet", "retryBtn"]
       .forEach(function (id) { dom[id] = document.getElementById(id); });

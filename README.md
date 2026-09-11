@@ -346,6 +346,82 @@ sends, and checks that a round commits, that resending it does not duplicate
 anything, that reads, listings and deletes are refused, and that oversized or
 mis-filed records bounce.
 
+## Cooper's Letter Tracing
+
+`trace.html`. The other two games ask her to *pick* a letter; this one asks
+her to *make* it, with her finger, on the iPad. That is a different thing. A
+`b` and a `d` are the same shape drawn in a different order, and the only
+thing that separates forming one from forming the other is which part the
+hand does first. Tracing teaches the hand, which is the intervention that
+actually works for reversals — the picking games can only test recognition.
+
+Each letter climbs its own ladder: **watch** (a ghost finger draws it while
+the cue is read out), **trace** (her finger follows a wide faint path that
+lights up behind her, in order, so the second stroke cannot be lit before the
+first), **copy** (the letter is shown small beside an empty box), and **from
+memory** (nothing on screen but the lines). Two clean goes and a letter moves
+up; two slips and it moves down. Which letter comes next leans towards the
+ones she finds hard, without ever becoming a round of only the hard ones.
+
+There is **no clock**. The clock was where the rushing came from in the word
+games, and there is nothing to be gained from a fast letter. A round is a
+number of letters instead, and the balloon fills as they go.
+
+**The mistake is the lesson.** When she draws a `d` where a `b` was wanted,
+the page shows what she drew over what it should have been, marks where the
+ball belongs, and says it: *"That's a d — the ball went left. A b has its ball
+on the right."* Then the ghost finger draws it again, and she has another go.
+
+### How it judges a letter
+
+`js/recogniser.js`, with no DOM in it, answers two questions separately
+because they need different answers:
+
+**What letter is this?** By shape alone — where the ink is, ignoring order
+and direction. Her drawing is compared with every letter and the closest
+wins, with a penalty for any part of either drawing that the other does not
+cover, so a `q` is not "an `a`, more or less". This is how "that's a d" gets
+said about a d however it was formed.
+
+**Was it formed the taught way?** Stroke by stroke, in order, in the
+direction drawn, against every accepted formation of the target. A `d` that
+began with the stick is still a `d`, but it was not formed like one, and the
+feedback says so gently: *"good d — next time start with the ball."*
+Rearrangements that name a fault are tried too: every stroke reversed
+(started at the wrong end), the first two swapped (wrong order), and a fit to
+the guide's size (right letter, too small).
+
+It is tested rather than trusted: every letter and every alternative
+formation is accepted as itself, **no other letter's template is ever
+accepted as the target** (26 × 25 pairs), a wobbly hand still passes and is
+never told it drew a different letter, `d`-for-`b` and `p`-for-`q` are called
+reversals, `m`-for-`n` is called humps, a scribble is not confidently called
+anything, and a single tap does not crash it.
+
+### The letters are data
+
+`js/strokes.js` holds every lowercase letter as an ordered list of strokes,
+each a polyline in a box with exercise-book writing lines. **This is one
+style — plain print, no lead-in strokes, the c-family drawn anticlockwise.**
+Schools differ, and teaching a different stroke pattern from the one she gets
+at school would confuse her, so it is a table, not code: a second style is
+another table, and the game does not need to know. Check it against her
+school books before leaning on it.
+
+Where more than one formation is common — `b` in one stroke or two, `o`
+either way round — the extras are accepted; an alternative with a tip passes
+and says the tip, which is how "try going round the other way, like a c" gets
+said without failing a perfectly good `o`.
+
+### What it logs
+
+One record per attempt: the letter, the rung, which attempt, whether it came
+out as that letter, whether it was formed the taught way, the fault the
+recogniser named if not, how long she took — and her strokes, ten points each
+as whole percentages of the box, so a better recogniser later can re-judge
+every letter she ever drew. The analytics page has a **Forming letters**
+section built from them.
+
 ## Reading the log
 
 `analytics.html` is the other half of the logging. Open it, press **Sign in
@@ -648,11 +724,17 @@ data/words.js           generated — the word list and its grades, loaded first
 data/definitions.js     generated — the meanings, loaded in the background
 wordbuilder.html        generated — the word game as one file
 missingletters.html     generated — missing letters as one file
+lettertracing.html      generated — letter tracing as one file
 analytics.html          the practice log, read back and made sense of
 css/analytics.css       its look
 js/analysis.js          the statistics: no DOM, so it can be tested in node
 js/analytics.js         the drawing: charts by hand, no libraries
 js/livelog.js           signing in, and reading the log back out of Firestore
+trace.html              Cooper's Letter Tracing
+css/trace.css           the tracing board
+js/strokes.js           every letter as strokes: one print style, as data
+js/recogniser.js        what did she draw, and how - no DOM, node-tested
+js/trace.js             the tracing round, the canvas, and her finger
 firestore.rules         who may write to the log, and what it must look like
 tools/build_dictionary.py
 tools/build_standalone.py
